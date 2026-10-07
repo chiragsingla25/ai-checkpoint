@@ -1,0 +1,22 @@
+[
+  {
+    "id": "F-001",
+    "title": "Finder-style renumbering of duplicate checkpoint names within a chat",
+    "acceptance": [
+      "In a fresh store, saving chat_name='trial', checkpoint_name='test-v1' twice stores cp-001 as 'test-v1' and cp-002 as 'test-v1 (1)'; a third save of the same pair stores cp-003 as 'test-v1 (2)' (check checkpoint_name in checkpoints/cp-00N.json and in list_checkpoints output)",
+      "The first save's file is byte-identical before and after the later saves (saves stay immutable), and ids stay sequential cp-001, cp-002, cp-003 with one git commit each; the commit message of a renumbered save uses the stored name (e.g. 'checkpoint: cp-002 trial/test-v1 (1)')",
+      "Matching is case-insensitive: with 'trial/test-v1' stored, saving checkpoint_name='Test-V1' in chat 'trial' is stored as 'Test-V1 (1)' (user's casing kept, suffix added); if 'test-v1 (1)' also exists it becomes 'Test-V1 (2)'",
+      "Chat matching is case-insensitive too: with 'trial/test-v1' stored, saving 'Trial'/'test-v1' is renumbered to 'test-v1 (1)'",
+      "Explicit numbered name that already exists: with 'test-v1' and 'test-v1 (1)' stored in 'trial', saving checkpoint_name='test-v1 (1)' is stored as 'test-v1 (2)' (suffix stripped to base, next free number), not 'test-v1 (1) (1)'; saving 'test-v1 (1)' when it does NOT yet exist stores it unchanged",
+      "Numbering uses the lowest free number in that chat: with 'test-v1' and 'test-v1 (2)' stored (no '(1)'), the next 'test-v1' save is stored as 'test-v1 (1)'; with legacy duplicates cp-001 and cp-002 both 'trial/test-v1', the next save is 'test-v1 (1)'",
+      "The same name in a different chat is not renumbered: with 'trial/test-v1' stored, saving 'other'/'test-v1' is stored as 'test-v1'",
+      "Save result: SaveResult.to_dict() (returned by the save_checkpoint MCP tool and printed by `ai-checkpoint save`) still contains checkpoint_id and commit, and also the stored checkpoint_name; for a renumbered save it states it was renamed, the requested name, and the id holding the original (e.g. renamed=true, requested_name='test-v1', original_id='cp-001', plus a human-readable message naming the stored name); a non-renumbered save reports renamed=false and the unchanged name",
+      "resolve: after saving 'trial/test-v1' three times, resolve('trial/test-v1') and resolve('test-v1') return cp-001; resolve('trial/test-v1 (1)') and resolve('test-v1 (1)') return cp-002; resolve('test-v1 (2)') returns cp-003; case variants ('TRIAL/Test-V1 (1)') resolve the same",
+      "Legacy duplicates: a store whose files cp-001 and cp-002 are both trial/test-v1 (written directly, as before this change) resolves 'trial/test-v1' and 'test-v1' to cp-001 (earliest within the chat); those files are not modified or renamed",
+      "Cross-chat bare names keep newest-chat-wins: with alpha/final (cp-001) then beta/final (cp-002), resolve('final') returns cp-002 and resolve('alpha/final') returns cp-001; within the chosen chat the earliest match is returned",
+      "Unknown refs still raise NotFoundError naming the ref (e.g. 'test-v1 (9)', 'trial/nope'); id refs (cp-002, cp-2) resolve as before",
+      "Save tool description / server instructions mention the renumbering only as needed; if SAVE_DESCRIPTION changes, the pinned hash in tests/test_eval.py is updated with a comment noting why",
+      "`$HOME/aic-venv/bin/python -m pytest -q` passes; the only changed pre-existing tests are those asserting newest-wins within a chat (tests/test_store.py test_same_name_creates_new_id_and_resolves_newest and test_bare_name_in_multiple_chats_resolves_newest) and each carries a comment explaining the behaviour change; resolution of distinct names (test_resolve_forms) gives the same results as before"
+    ]
+  }
+]

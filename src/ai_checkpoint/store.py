@@ -31,6 +31,7 @@ from .redact import redact_obj
 ENV_HOME = "AI_CHECKPOINT_HOME"
 CHECKPOINT_DIR = "checkpoints"
 _FILE_RE = re.compile(r"^cp-(\d+)\.json$")
+_NUMBERED_RE = re.compile(r"^(.*\S)\s+\((\d+)\)$")
 _GIT_IDENTITY = ("-c", "user.name=AI Checkpoint", "-c", "user.email=ai-checkpoint@localhost",
                  "-c", "commit.gpgsign=false")
 
@@ -48,9 +49,24 @@ class SaveResult:
     checkpoint_id: str
     commit: str
     checkpoint: Checkpoint
+    renamed: bool = False
+    requested_name: Optional[str] = None
+    original_id: Optional[str] = None
+    clash_id: Optional[str] = None  # id already holding the requested name
 
     def to_dict(self) -> dict:
-        return {"checkpoint_id": self.checkpoint_id, "commit": self.commit}
+        name = self.checkpoint.checkpoint_name
+        requested = self.requested_name if self.requested_name is not None else name
+        if self.renamed:
+            message = (f"A checkpoint named {requested!r} already exists in this chat"
+                       f" ({self.clash_id or self.original_id}); saved as {name!r} instead.")
+        else:
+            message = f"Saved as {name!r}."
+        return {"checkpoint_id": self.checkpoint_id, "commit": self.commit,
+                "checkpoint_name": name, "renamed": self.renamed,
+                "requested_name": requested,
+                "original_id": self.original_id if self.renamed else None,
+                "message": message}
 
 
 @dataclass
@@ -204,6 +220,8 @@ class GitStore:
 
         self._ensure_repo()
         with self._lock():
+            requested = cp.checkpoint_name
+            renamed, original_id, clash_id = self._unique_name(cp)
             cp.checkpoint_id = self._next_id()
             cp.created_at = self._clock().astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             path = self.path_for(cp.checkpoint_id)
@@ -222,7 +240,31 @@ class GitStore:
                 self._git("reset", "-q", "--", rel, check=False)
                 raise
             commit = self._git("rev-parse", "HEAD").stdout.strip()
-        return SaveResult(cp.checkpoint_id, commit, cp)
+        return SaveResult(cp.checkpoint_id, commit, cp, renamed, requested, original_id, clash_id)
+
+    def _unique_name(self, cp: Checkpoint):
+        """Finder-style renumbering within the chat (case-insensitive).
+
+        Sets ``cp.checkpoint_name`` to a free name; returns (renamed, original_id, clash_id).
+        """
+        chat = cp.chat_name.strip().casefold()
+        same = sorted((c for c in self._all() if c.chat_name.strip().casefold() == chat),
+                      key=lambda c: id_number(c.checkpoint_id))
+        taken = {c.checkpoint_name.strip().casefold() for c in same}
+        name = cp.checkpoint_name
+        if name.strip().casefold() not in taken:
+            return False, None, None
+        m = _NUMBERED_RE.match(name.strip())
+        base = m.group(1) if m else name.strip()
+        n = 1
+        while f"{base} ({n})".casefold() in taken:
+            n += 1
+        clash = next(c.checkpoint_id for c in same
+                     if c.checkpoint_name.strip().casefold() == name.strip().casefold())
+        original = next((c.checkpoint_id for c in same
+                         if c.checkpoint_name.strip().casefold() == base.casefold()), clash)
+        cp.checkpoint_name = f"{base} ({n})"
+        return True, original, clash
 
     # ------------------------------------------------------------ read
     def _load(self, path: Path) -> Optional[Checkpoint]:
@@ -246,8 +288,8 @@ class GitStore:
         """Resolve a ref to a checkpoint id.
 
         ``ref`` is an id (``cp-007``), a ``checkpoint_name`` or
-        ``chat_name/checkpoint_name``. Names resolve to the newest match, also
-        across chats. Raises NotFoundError naming the ref.
+        ``chat_name/checkpoint_name``. Names resolve to the earliest match within
+        a chat; across chats the chat of the newest match wins. Raises NotFoundError naming the ref.
         """
         if not isinstance(ref, str) or not ref.strip():
             raise NotFoundError(str(ref), f"checkpoint not found: empty ref {ref!r}")
@@ -270,9 +312,12 @@ class GitStore:
             candidates.append(lambda c: f"{c.chat_name}/{c.checkpoint_name}".casefold() == folded)
         candidates.append(lambda c: c.checkpoint_name.casefold() == folded)
         for match in candidates:
-            for c in cps:
-                if match(c):
-                    return c.checkpoint_id
+            hits = [c for c in cps if match(c)]  # newest first
+            if hits:
+                # Newest match picks the chat; within that chat the earliest match wins.
+                chat = hits[0].chat_name.strip().casefold()
+                return min((c for c in hits if c.chat_name.strip().casefold() == chat),
+                           key=lambda c: id_number(c.checkpoint_id)).checkpoint_id
         raise NotFoundError(ref)
 
     def get(self, ref: str) -> Checkpoint:

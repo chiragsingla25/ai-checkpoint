@@ -104,8 +104,12 @@ def test_same_name_creates_new_id_and_resolves_newest(store, valid):
     b = save(store, valid, objective="second")
     assert a.checkpoint_id != b.checkpoint_id
     assert store.path_for(a.checkpoint_id).read_bytes() == before
-    assert store.get("v1").objective == "second"
-    assert store.get("forecasting/v1").checkpoint_id == b.checkpoint_id
+    # Behaviour change: a same-name save in the same chat is renumbered ("v1 (1)"),
+    # so the base name keeps resolving to the earliest save, not the newest.
+    assert b.checkpoint.checkpoint_name == "v1 (1)"
+    assert store.get("v1").objective == "first"
+    assert store.get("forecasting/v1").checkpoint_id == a.checkpoint_id
+    assert store.get("v1 (1)").objective == "second"
     assert store.get(a.checkpoint_id).objective == "first"
 
 
@@ -132,8 +136,12 @@ def test_bare_name_in_multiple_chats_resolves_newest(store, valid):
     b = save(store, valid, chat_name="beta", checkpoint_name="final")
     assert store.resolve("final") == b.checkpoint_id
     assert store.resolve("alpha/final") == a.checkpoint_id
+    # Behaviour change: the same name in alpha is renumbered ("final (1)"), so the
+    # bare name "final" still resolves to the newest chat's match (beta).
     c = save(store, valid, chat_name="alpha", checkpoint_name="final")
-    assert store.resolve("final") == c.checkpoint_id
+    assert c.checkpoint.checkpoint_name == "final (1)"
+    assert store.resolve("final") == b.checkpoint_id
+    assert store.resolve("final (1)") == c.checkpoint_id
 
 
 # --- AC8: validation --------------------------------------------------------
@@ -275,3 +283,85 @@ def test_brief_tokens_uses_brief_hook(store, valid, monkeypatch):
 def test_works_without_git_identity(store, valid, root):
     save(store, valid)  # conftest sets GIT_CONFIG_GLOBAL=/dev/null, no user.name anywhere
     assert "AI Checkpoint" in git(root, "log", "--format=%an")
+
+
+# --- F-001: Finder-style renumbering of duplicate names within a chat -------
+def _names(store):
+    return {e.checkpoint_id: e.checkpoint_name for e in store.list().checkpoints}
+
+
+def test_duplicate_names_renumbered_immutably(store, valid):
+    a = save(store, valid, chat_name="trial", checkpoint_name="test-v1")
+    before = store.path_for("cp-001").read_bytes()
+    b = save(store, valid, chat_name="trial", checkpoint_name="test-v1")
+    c = save(store, valid, chat_name="trial", checkpoint_name="test-v1")
+    assert (a.checkpoint_id, b.checkpoint_id, c.checkpoint_id) == ("cp-001", "cp-002", "cp-003")
+    assert _names(store) == {"cp-001": "test-v1", "cp-002": "test-v1 (1)", "cp-003": "test-v1 (2)"}
+    assert store.path_for("cp-001").read_bytes() == before
+    log = subprocess.run(["git", "-C", str(store.root), "log", "--format=%s"],
+                         capture_output=True, text=True).stdout.splitlines()
+    assert log[1] == "checkpoint: cp-002 trial/test-v1 (1)" and len(log) == 3
+    d = b.to_dict()
+    assert d["renamed"] is True and d["requested_name"] == "test-v1"
+    assert d["original_id"] == "cp-001" and d["checkpoint_name"] == "test-v1 (1)"
+    assert "test-v1 (1)" in d["message"] and d["checkpoint_id"] == "cp-002" and d["commit"]
+    d = a.to_dict()
+    assert d["renamed"] is False and d["checkpoint_name"] == "test-v1" and d["original_id"] is None
+
+
+def test_renumber_case_insensitive(store, valid):
+    save(store, valid, chat_name="trial", checkpoint_name="test-v1")
+    b = save(store, valid, chat_name="trial", checkpoint_name="Test-V1")
+    assert b.checkpoint.checkpoint_name == "Test-V1 (1)"
+    c = save(store, valid, chat_name="trial", checkpoint_name="TEST-v1")
+    assert c.checkpoint.checkpoint_name == "TEST-v1 (2)"
+    d = save(store, valid, chat_name="Trial", checkpoint_name="test-v1")
+    assert d.checkpoint.checkpoint_name == "test-v1 (3)"
+
+
+def test_explicit_numbered_name(store, valid):
+    save(store, valid, chat_name="trial", checkpoint_name="test-v1")
+    x = save(store, valid, chat_name="trial", checkpoint_name="test-v1 (1)")
+    assert x.checkpoint.checkpoint_name == "test-v1 (1)" and not x.renamed
+    y = save(store, valid, chat_name="trial", checkpoint_name="test-v1 (1)")
+    assert y.checkpoint.checkpoint_name == "test-v1 (2)" and y.original_id == "cp-001"
+
+
+def test_lowest_free_number_and_legacy(store, valid):
+    save(store, valid, chat_name="trial", checkpoint_name="test-v1")
+    save(store, valid, chat_name="trial", checkpoint_name="test-v1 (2)")
+    n = save(store, valid, chat_name="trial", checkpoint_name="test-v1")
+    assert n.checkpoint.checkpoint_name == "test-v1 (1)"
+
+
+def test_legacy_duplicates(store, valid):
+    store._ensure_repo()
+    for i in (1, 2):
+        d = dict(valid, chat_name="trial", checkpoint_name="test-v1")
+        cp = ai_checkpoint.model.Checkpoint.from_dict(d)
+        cp.checkpoint_id = f"cp-00{i}"
+        cp.created_at = "2026-01-01T00:00:00Z"
+        store.path_for(cp.checkpoint_id).write_text(json.dumps(cp.to_dict()), encoding="utf-8")
+    assert store.resolve("trial/test-v1") == "cp-001"
+    assert store.resolve("test-v1") == "cp-001"
+    n = save(store, valid, chat_name="trial", checkpoint_name="test-v1")
+    assert n.checkpoint.checkpoint_name == "test-v1 (1)"
+
+
+def test_other_chat_not_renumbered(store, valid):
+    save(store, valid, chat_name="trial", checkpoint_name="test-v1")
+    o = save(store, valid, chat_name="other", checkpoint_name="test-v1")
+    assert o.checkpoint.checkpoint_name == "test-v1" and not o.renamed
+
+
+def test_resolve_numbered_names(store, valid):
+    for _ in range(3):
+        save(store, valid, chat_name="trial", checkpoint_name="test-v1")
+    assert store.resolve("trial/test-v1") == store.resolve("test-v1") == "cp-001"
+    assert store.resolve("trial/test-v1 (1)") == store.resolve("test-v1 (1)") == "cp-002"
+    assert store.resolve("test-v1 (2)") == "cp-003"
+    assert store.resolve("TRIAL/Test-V1 (1)") == "cp-002"
+    for ref in ("test-v1 (9)", "trial/nope"):
+        with pytest.raises(NotFoundError) as e:
+            store.resolve(ref)
+        assert ref in str(e.value)

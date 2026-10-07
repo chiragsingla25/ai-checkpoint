@@ -1,0 +1,19 @@
+{
+  "order": [
+    "intake",
+    "build",
+    "qa"
+  ],
+  "skipped": [],
+  "per_feature": [
+    "build",
+    "qa"
+  ],
+  "agents": {
+    "intake": "consultancy:intake",
+    "build": "consultancy:builder",
+    "qa": "consultancy:qa"
+  },
+  "reason": "Changes save and resolve behaviour on existing data; needs independent QA and a regression sweep.",
+  "created": "2026-10-07T07:40:50"
+}
