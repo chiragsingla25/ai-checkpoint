@@ -45,6 +45,11 @@ _JSON_ASSIGN = re.compile(
     re.IGNORECASE,
 )
 
+# scheme://user:SECRET@host -- only the password/token part is replaced
+_URL_CRED = re.compile(
+    r"(?P<pre>\b[A-Za-z][A-Za-z0-9+.\-]*://[^\s/:@'\"`<>]+:)(?P<pw>[^\s/@'\"`<>]+)(?=@)"
+)
+
 _PLACEHOLDER_START = ("$", "<", "{", "%", "[REDACTED")
 _NON_SECRET_WORDS = {"none", "null", "true", "false", "nil", "undefined"}
 
@@ -71,10 +76,18 @@ def _assign_sub(m: re.Match) -> str:
     return m.group("pre") + MARKER
 
 
+def _url_cred_sub(m: re.Match) -> str:
+    pw = m.group("pw")
+    if pw.startswith(_PLACEHOLDER_START):
+        return m.group(0)
+    return m.group("pre") + MARKER
+
+
 def redact_text(text: str) -> str:
     """Replace secrets in ``text`` with ``[REDACTED]``. Idempotent."""
     for pat in _TOKEN_PATTERNS:
         text = pat.sub(MARKER, text)
+    text = _URL_CRED.sub(_url_cred_sub, text)
     text = _BEARER.sub(_bearer_sub, text)
     text = _JSON_ASSIGN.sub(_assign_sub, text)
     text = _ASSIGN.sub(_assign_sub, text)

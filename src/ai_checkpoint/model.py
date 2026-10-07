@@ -27,6 +27,7 @@ SECTION_FIELDS = (
     "verbatim",
     "last_exchange",
     "notes_for_next_ai",
+    "workspace",
 )
 METADATA_FIELDS = (
     "chat_name",
@@ -64,6 +65,27 @@ class Rejected:
     note: str = ""
 
 
+#: Whether a workspace item is still needed by the work.
+STATUS_VALUES = ("still_relevant", "done_with")
+
+#: Workspace categories: name -> (required key field, optional string fields,
+#: optional string-list fields). Every item also carries a required ``status``.
+WORKSPACE_CATEGORIES = {
+    "files": ("path", ("note",), ()),
+    "repos": ("path", ("branch", "last_commit", "note"), ()),
+    "access": ("path", ("note",), ("permissions",)),
+    "connectors": ("name", ("note",), ()),
+    "tools": ("name", ("note",), ()),
+    "env_vars": ("name", (), ()),
+    "skills": ("name", ("note",), ()),
+    "references": ("name", ("url", "note"), ()),
+}
+
+
+def empty_workspace() -> dict:
+    return {cat: [] for cat in WORKSPACE_CATEGORIES}
+
+
 @dataclass
 class Decision:
     decision: str
@@ -97,6 +119,7 @@ class Checkpoint:
     verbatim: list = field(default_factory=list)
     last_exchange: LastExchange = field(default_factory=LastExchange)
     notes_for_next_ai: str = ""
+    workspace: dict = field(default_factory=empty_workspace)
     client: str = "unknown"
     resumed_from: Optional[str] = None
     checkpoint_id: str = ""
@@ -125,7 +148,13 @@ class Checkpoint:
                 "assistant": self.last_exchange.assistant,
             },
             "notes_for_next_ai": self.notes_for_next_ai,
+            **self._workspace_part(),
         }
+
+    def _workspace_part(self) -> dict:
+        # omitted when empty so checkpoints without it keep their old shape
+        ws = {cat: [dict(i) for i in items] for cat, items in self.workspace.items() if items}
+        return {"workspace": ws} if ws else {}
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "Checkpoint":
@@ -149,6 +178,7 @@ class Checkpoint:
             verbatim=_verbatim(g("verbatim")),
             last_exchange=_last_exchange(g("last_exchange")),
             notes_for_next_ai=_opt_str(g("notes_for_next_ai"), "notes_for_next_ai"),
+            workspace=_workspace(g("workspace")),
             client=_opt_str(g("client"), "client") or "unknown",
             resumed_from=_opt_ref(g("resumed_from")),
             checkpoint_id=_opt_str(g("checkpoint_id"), "checkpoint_id"),
@@ -272,6 +302,43 @@ def _rejected(v: Any, name: str) -> list:
                 note=_opt_str(item.get("note"), f"{name}[{i}].note"),
             )
         )
+    return out
+
+
+def _workspace(v: Any) -> dict:
+    out = empty_workspace()
+    if v is None:
+        return out
+    if not isinstance(v, Mapping):
+        raise ValidationError("workspace", f"must be an object, got {_type_name(v)}")
+    for cat, (key, opt_strs, opt_lists) in WORKSPACE_CATEGORIES.items():
+        base = f"workspace.{cat}"
+        for i, item in enumerate(_obj_list(v.get(cat), base)):
+            at = f"{base}[{i}]"
+            entry = {key: _req_str(item.get(key), f"{at}.{key}")}
+            if cat == "env_vars":
+                # names only: "NAME=value" is reduced to "NAME", the value is never kept
+                name = entry["name"].split("=", 1)[0].strip()
+                if not name:
+                    raise ValidationError(f"{at}.name", "must not be empty")
+                entry["name"] = name
+            for f in opt_strs:
+                val = _opt_str(item.get(f), f"{at}.{f}")
+                if val.strip():
+                    entry[f] = val
+            for f in opt_lists:
+                vals = _str_list(item.get(f), f"{at}.{f}")
+                if vals:
+                    entry[f] = vals
+            status = item.get("status")
+            if status is None:
+                raise ValidationError(f"{at}.status", "is required")
+            if status not in STATUS_VALUES:
+                raise ValidationError(
+                    f"{at}.status", f"must be one of {', '.join(STATUS_VALUES)}, got {status!r}"
+                )
+            entry["status"] = status
+            out[cat].append(entry)
     return out
 
 

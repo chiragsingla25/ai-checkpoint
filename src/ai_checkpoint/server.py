@@ -58,6 +58,59 @@ class DecisionIn(BaseModel):
     rejected: List[RejectedIn] = Field(default_factory=list, description=FD["decisions.rejected"])
 
 
+Status = Literal["still_relevant", "done_with"]
+
+
+class WsFile(BaseModel):
+    path: str
+    note: Optional[str] = None
+    status: Status
+
+
+class WsRepo(BaseModel):
+    path: str
+    branch: Optional[str] = None
+    last_commit: Optional[str] = None
+    note: Optional[str] = None
+    status: Status
+
+
+class WsAccess(BaseModel):
+    path: str
+    permissions: List[str] = Field(default_factory=list)
+    note: Optional[str] = None
+    status: Status
+
+
+class WsNamed(BaseModel):
+    name: str
+    note: Optional[str] = None
+    status: Status
+
+
+class WsEnvVar(BaseModel):
+    name: str = Field(description="The variable NAME only, never its value.")
+    status: Status
+
+
+class WsReference(BaseModel):
+    name: str
+    url: Optional[str] = None
+    note: Optional[str] = None
+    status: Status
+
+
+class WorkspaceIn(BaseModel):
+    files: List[WsFile] = Field(default_factory=list, description=FD["workspace.files"])
+    repos: List[WsRepo] = Field(default_factory=list, description=FD["workspace.repos"])
+    access: List[WsAccess] = Field(default_factory=list, description=FD["workspace.access"])
+    connectors: List[WsNamed] = Field(default_factory=list, description=FD["workspace.connectors"])
+    tools: List[WsNamed] = Field(default_factory=list, description=FD["workspace.tools"])
+    env_vars: List[WsEnvVar] = Field(default_factory=list, description=FD["workspace.env_vars"])
+    skills: List[WsNamed] = Field(default_factory=list, description=FD["workspace.skills"])
+    references: List[WsReference] = Field(default_factory=list, description=FD["workspace.references"])
+
+
 class VerbatimIn(BaseModel):
     label: str = Field(description=FD["verbatim.label"])
     content: str = Field(description=FD["verbatim.content"])
@@ -97,6 +150,7 @@ def create_server(store: Optional[GitStore] = None):
         verbatim: List[VerbatimIn] = Field(default_factory=list, description=FD["verbatim"]),
         last_exchange: LastExchangeIn = Field(default_factory=LastExchangeIn, description=FD["last_exchange"]),
         notes_for_next_ai: str = Field(default="", description=FD["notes_for_next_ai"]),
+        workspace: Optional[WorkspaceIn] = Field(default=None, description=FD["workspace"]),
         client: Optional[str] = Field(default=None, description=FD["client"]),
         resumed_from: Optional[str] = Field(default=None, description=FD["resumed_from"]),
     ) -> dict[str, Any]:
@@ -106,6 +160,7 @@ def create_server(store: Optional[GitStore] = None):
             decisions=[d.model_dump() for d in decisions], completed=completed,
             open_questions=open_questions, verbatim=[v.model_dump() for v in verbatim],
             last_exchange=last_exchange.model_dump(), notes_for_next_ai=notes_for_next_ai,
+            workspace=workspace.model_dump() if workspace else None,
             client=client, resumed_from=resumed_from,
         )
         return _wrap(lambda: get_store().save(data).to_dict())

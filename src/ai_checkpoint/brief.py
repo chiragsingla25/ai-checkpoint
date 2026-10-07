@@ -81,6 +81,44 @@ def _label(label: str) -> str:
     return " ".join(label.split())
 
 
+def _item(it: dict, key: str, extras=()) -> str:
+    line = _label(it[key])
+    bits = [f"{lab} {_label(it[f])}" for f, lab in extras if it.get(f)]
+    if it.get("permissions"):
+        bits.append("permissions: " + ", ".join(_label(x) for x in it["permissions"]))
+    if bits:
+        line += " (" + "; ".join(bits) + ")"
+    if it.get("note"):
+        line += f" - {_label(it['note'])}"
+    return line
+
+
+def _setup_first(ws: dict) -> str:
+    """The 'Set up first' checklist from still-relevant items; "" when there are none."""
+    live = {c: [i for i in items if i.get("status") == "still_relevant"] for c, items in ws.items()}
+    rows = []
+
+    def add(title: str, cat: str, key: str, extras=()) -> None:
+        if live.get(cat):
+            rows.append(f"- {title}: " + "; ".join(_item(i, key, extras) for i in live[cat]))
+
+    add("Folders to ask the user for access to", "access", "path")
+    add("Connectors to check", "connectors", "name")
+    add("Repos", "repos", "path", (("branch", "branch"), ("last_commit", "last commit")))
+    add("Tools and setup", "tools", "name")
+    add("Environment variables that must be set (names only)", "env_vars", "name")
+    add("Skills, plugins and agents", "skills", "name")
+    add("Files to open", "files", "path")
+    add("References", "references", "name", (("url", "link"),))
+    if not rows:
+        return ""
+    return (
+        "## Set up first\n\n"
+        "Ask the user before you request any folder access or connector; do not assume "
+        "you already have it. Then check these:\n\n" + "\n".join(rows)
+    )
+
+
 def render_brief(cp: Checkpoint) -> str:
     """Render the continuation brief for ``cp``."""
     ref = f"{cp.chat_name}/{cp.checkpoint_name}"
@@ -132,6 +170,9 @@ def render_brief(cp: Checkpoint) -> str:
     else:
         section("Last exchange", EMPTY_MARK)
     section("Notes from the previous AI", _text(cp.notes_for_next_ai))
+    setup = _setup_first(cp.workspace)
+    if setup:
+        parts.append(setup)
     parts.append(
         "## Before you continue\n\n"
         "Start by telling the user, in one or two sentences, which step you understand "

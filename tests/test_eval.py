@@ -345,10 +345,14 @@ def test_api_failure_is_a_clean_model_error(monkeypatch):
         make_model("anthropic").complete("s", [{"role": "user", "content": "x"}])
 
 
-# Frozen copy of the save_checkpoint tool description as committed at F-002 (HEAD f9d9510).
-# Deliberately NOT derived from schema.py, so any drift in that text fails here.
-_HEAD_SAVE_DESCRIPTION_SHA256 = "38f2a104d74910bb8edac253e0527c2dbf371eb86aad6a32fa06670ac05af52f"
-_HEAD_SAVE_DESCRIPTION_LEN = 1676
+# Frozen copy of the save_checkpoint tool description. Deliberately NOT derived from
+# schema.py, so any drift in that text fails here.
+# Deliberately updated (was sha 38f2a104..., len 1676, HEAD f9d9510) when the checkpoint format
+# gained `decisions[].rejected` and the `workspace` section: the description now asks the saving
+# AI to record rejected alternatives and to fill `workspace` (judge each item still_relevant /
+# done_with, env var names only, never values).
+_HEAD_SAVE_DESCRIPTION_SHA256 = "0b89d3ba57a215624aec5ba26502f4ce2bf3c77782d56bcb8c98660ce3641bc4"
+_HEAD_SAVE_DESCRIPTION_LEN = 2279
 
 
 def test_save_description_matches_committed_head_text():

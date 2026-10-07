@@ -24,6 +24,14 @@ questions are not reopened.
 - Never invent anything. If something was not said or decided in the conversation, leave it \
 out or list it under `open_questions`. Do not guess file contents, numbers or intentions.
 - Do not include secrets (API keys, passwords, tokens); describe where they live instead.
+- For each decision, list in `rejected` the alternatives that were turned down and how far \
+each got (discussed, prototyped, built_then_removed), so the next chat can say whether X was \
+ever tried.
+- Fill `workspace` with the environment the work used: folders and files, repos (branch and \
+last commit), access that had to be granted, connectors or MCP servers, tools and setup, \
+env var NAMES, skills/plugins/agents and external references. Judge each item: mark it \
+`still_relevant` if the work will need it again, `done_with` if not. Give env var names \
+only, never their values, and no credential paths.
 - `current_step` is the exact step the chat was on at this moment, and `next_steps` are \
 ordered, concrete instructions the next AI can follow without asking.
 
@@ -67,6 +75,23 @@ FIELD_DESCRIPTIONS = {
     ),
     "decisions.rejected.note": "Optional. Why it was dropped or what the trial showed.",
     "completed": "What is already done.",
+    "workspace": (
+        "Optional. The environment the work depended on, as an object of lists: files, repos, "
+        "access, connectors, tools, env_vars, skills, references. Every item has a `status` of "
+        "\"still_relevant\" or \"done_with\"; judge each one. Only still-relevant items are "
+        "shown to the next chat as a 'Set up first' checklist. Env var names only, never values."
+    ),
+    "workspace.files": "Files or folders worked with: {path, note?, status}. Key files to open first.",
+    "workspace.repos": "Repos: {path, branch?, last_commit?, note?, status}. Branch and last commit at save time.",
+    "workspace.access": (
+        "Access that had to be granted: {path, permissions?: array of strings such as \"delete\" "
+        "or \"push\", note?, status}. The path is the folder."
+    ),
+    "workspace.connectors": "Connectors or MCP servers used: {name, note?, status}.",
+    "workspace.tools": "Tools and setup (venv or interpreter, CLIs, local servers or ports): {name, note?, status}.",
+    "workspace.env_vars": "Environment variables needed, by NAME only: {name, status}. Never include a value.",
+    "workspace.skills": "Skills, plugins or agents used: {name, note?, status}.",
+    "workspace.references": "External references (URL, doc, ticket, artifact): {name, url?, note?, status}.",
     "open_questions": "Unresolved questions or items still waiting on the user.",
     "verbatim": "Material that must not be paraphrased: code, numbers, exact wording, file contents. Each with a label.",
     "verbatim.label": "Short label saying what this is, e.g. 'SQL query' or 'system prompt'.",
@@ -101,10 +126,16 @@ COMPACTION_FIELDS = (
     ("verbatim", "array of {label: string, content: string}", False),
     ("last_exchange", "object {user: string, assistant: string}", False),
     ("notes_for_next_ai", "string", False),
+    (
+        "workspace",
+        "object of arrays (files, repos, access, connectors, tools, env_vars, skills, "
+        "references); each item has a status \"still_relevant\"|\"done_with\"",
+        False,
+    ),
     ("client", "string or null", False),
 )
 
-_NESTED = ("decisions", "verbatim", "last_exchange")
+_NESTED = ("decisions", "verbatim", "last_exchange", "workspace")
 
 
 def compaction_system_prompt() -> str:
