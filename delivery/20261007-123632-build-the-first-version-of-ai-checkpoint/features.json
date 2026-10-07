@@ -1,0 +1,50 @@
+[
+  {
+    "id": "F-001",
+    "title": "Checkpoint format, validation and git-backed local storage",
+    "acceptance": [
+      "The package `ai_checkpoint` is importable with only the standard library installed (no `mcp`, `anthropic` or `openai` import at module load of the core/storage modules); `pip install -e .` from the repo root succeeds and `pytest` runs the test suite offline.",
+      "The checkpoint model holds the sections objective, context, decisions (each with decision and reason), completed, current_step, next_steps, open_questions, verbatim (each item with label and content), last_exchange (user and assistant text), notes_for_next_ai, plus metadata chat_name, checkpoint_name, checkpoint_id, created_at (ISO 8601 UTC), client and resumed_from; a saved checkpoint JSON file contains every one of these keys.",
+      "The store root defaults to `~/.ai-checkpoint` and is overridden by the env var `AI_CHECKPOINT_HOME`; with `AI_CHECKPOINT_HOME=<tmpdir>` a save writes only under <tmpdir> (nothing is created under the real home directory).",
+      "On first save the store root is initialised as a git repository (works with no global git user configured); each save writes `checkpoints/cp-NNN.json` and creates exactly one commit whose message is `checkpoint: cp-NNN <chat_name>/<checkpoint_name>`; `git -C <root> log --oneline` shows one commit per save and `git status --porcelain` is empty afterwards.",
+      "Checkpoint IDs are sequential and zero-padded (`cp-001`, `cp-002`, ...); IDs are never reused, including after a checkpoint file is deleted from the working tree (the next save after deleting cp-002 of 2 is cp-003).",
+      "Saved checkpoints are immutable: saving again with the same chat_name and checkpoint_name creates a new id, the earlier file's bytes are unchanged, and resolving the name (`checkpoint_name` or `chat_name/checkpoint_name`) returns the newest one; resolving by id returns that exact checkpoint.",
+      "Ref resolution accepts a checkpoint id (`cp-007`), a bare checkpoint_name, or `chat_name/checkpoint_name`; an unknown ref raises a clear not-found error naming the ref; a bare name that matches checkpoints in more than one chat resolves to the newest and this behaviour is covered by a test.",
+      "Validation: a save missing objective, current_step or next_steps, or with next_steps empty, or with a section of the wrong type (e.g. next_steps as a string, a verbatim item without label) is rejected with an error that names the offending field, and nothing is written or committed.",
+      "A save with `resumed_from` set to a ref that does not exist is rejected with a clear error; with an existing ref it is stored as that checkpoint's id.",
+      "Secret redaction: before writing, values matching common secret patterns (at least `sk-...`/`sk-ant-...` API keys, `ghp_`/`github_pat_` tokens, `AKIA...` AWS key ids, `Bearer <token>`, and `api_key=`/`token=`/`password=` assignments) in any text field, including verbatim content, are replaced by a `[REDACTED]` marker; a test saves a checkpoint containing such strings and asserts none appear in the file on disk or in `git log -p`, while ordinary text and code in verbatim is otherwise unchanged byte-for-byte.",
+      "Listing returns checkpoints newest first, optionally filtered by chat_name, grouped by chat, each entry with id, chat_name, checkpoint_name, created_at, client, resumed_from and an approximate token count of its resume brief; listing an empty or not-yet-created store returns an empty result, not an error."
+    ]
+  },
+  {
+    "id": "F-002",
+    "title": "Local stdio MCP server, resume brief and thin CLI",
+    "acceptance": [
+      "The MCP server (built on the official `mcp` Python SDK) starts over stdio via a console script (e.g. `ai-checkpoint-mcp`) and `python -m ai_checkpoint.server`; a test launches it as a subprocess with `AI_CHECKPOINT_HOME=<tmpdir>`, opens an `mcp` ClientSession over stdio, and `list_tools` returns exactly save_checkpoint, list_checkpoints, get_checkpoint and resume_checkpoint, and `list_prompts` includes `resume` with a `ref` argument.",
+      "The save_checkpoint tool's input schema exposes every checkpoint section as a named property with a description (objective, current_step and next_steps required; client and resumed_from optional), so the schema itself documents the compaction format.",
+      "Over the stdio session: calling save_checkpoint with valid sections returns the new checkpoint id and commit hash; list_checkpoints, get_checkpoint and resume_checkpoint then return the saved data; `get_prompt('resume', {'ref': ...})` returns a message whose text equals the resume_checkpoint output for the same ref.",
+      "Tools are also callable in-process (without a subprocess) in tests, and invalid input (missing required field, empty next_steps, unknown ref, nonexistent resumed_from) produces an MCP tool error result (`isError` true) with a message naming the problem; the server keeps running and a following valid call succeeds.",
+      "The resume brief is deterministic: two calls for the same checkpoint return identical text; it starts by naming the checkpoint (id, chat_name/checkpoint_name, created_at), presents sections in a fixed documented order (objective, context, decisions, completed, current step, next steps, open questions, verbatim, last exchange, notes), omits or marks empty optional sections consistently, and ends with an instruction to confirm the current step with the user before continuing.",
+      "Each verbatim item appears in the brief inside a fenced code block with its label, and its content is reproduced byte-for-byte (test: content containing backticks including a triple-backtick run, leading/trailing whitespace, tabs and unicode is extracted from the brief unchanged; the fence is longer than any backtick run in the content).",
+      "last_exchange user and assistant messages appear in the brief word for word.",
+      "get_checkpoint and list_checkpoints output include a size/token estimate for the checkpoint's resume brief (a documented heuristic, e.g. characters/4, is acceptable).",
+      "A thin CLI (`ai-checkpoint` console script or `python -m ai_checkpoint`) supports `save --file <checkpoint.json>`, `list [--chat NAME]`, `get REF` and `resume REF` against the same store; `resume REF` prints exactly the same brief as the MCP tool; invalid input or an unknown ref prints a clear message to stderr and exits non-zero without a traceback.",
+      "The README documents installation and how to register the server in Claude Desktop / Claude Code (an example `mcpServers` config with the command and `AI_CHECKPOINT_HOME`)."
+    ]
+  },
+  {
+    "id": "F-003",
+    "title": "Handover evaluation kit",
+    "acceptance": [
+      "A CLI `checkpoint-eval` (and `python -m ai_checkpoint.eval`) takes a scenario file and an output directory, e.g. `checkpoint-eval run examples/scenarios/<name>.json --model fake --out <dir>`, and runs fully offline with the deterministic FakeModel.",
+      "Scenario file format (JSON) is documented and validated: a conversation as a list of {role, content} messages, plus a list of probes each with a question and reference answer / key facts (and optionally facts that must not be contradicted); a malformed scenario (missing messages, empty probes, probe without key facts) gives a clear error naming the problem and a non-zero exit, no traceback.",
+      "For each scenario the kit builds three handover variants: (a) checkpoint brief, produced by a compaction model call that must fill the checkpoint schema, validated with F-001's validation and rendered with F-002's resume brief; (b) a plain-summary brief from a free-form summary model call; (c) full history (the raw conversation). If the compaction output fails validation, the variant is recorded as failed with the error rather than crashing the run.",
+      "Each probe is answered in a fresh 'new chat' model call that sees only that variant's handover text plus the probe question (no shared state between calls), and each answer is scored by a judge call for key-fact recall (fraction of key facts present) and contradictions (count of statements contradicting the reference).",
+      "Model access goes through a small interface (e.g. `Model.complete(system, messages) -> str`); FakeModel is deterministic so two offline runs of the same scenario produce identical results files (excluding timestamps if any are stored separately).",
+      "Anthropic and OpenAI adapters exist and their SDKs are imported only when selected; selecting `--model anthropic` without `ANTHROPIC_API_KEY` (or `--model openai` without `OPENAI_API_KEY`) prints a clear message naming the missing variable and exits non-zero without a traceback, and the test suite never makes network calls.",
+      "Output: a JSON results file with per-variant, per-probe answers and scores plus per-variant aggregates, and a markdown table with one row per variant (checkpoint, summary, full_history) and columns for key-fact recall, contradictions and brief tokens; both files are written to the output directory and the table is also printed to stdout.",
+      "At least two realistic example scenarios ship in the repo (e.g. a multi-step coding task with exact code/numbers to preserve, and a planning/analysis task with decisions and reasons), each with at least 4 probes, and the offline run succeeds on both.",
+      "The README explains how to run the evaluation offline and with real models, and what each metric means."
+    ]
+  }
+]

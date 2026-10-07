@@ -1,0 +1,21 @@
+## F-001 attempt 1
+- What changed:
+  - `.gitignore`, `pyproject.toml` (setuptools, src layout, requires-python >=3.10, no runtime deps; extras `mcp`, `anthropic`, `openai`, `dev`; pytest config with `pythonpath=src`), `README.md` (short stub).
+  - `src/ai_checkpoint/errors.py`: `CheckpointError`, `ValidationError(field, message)`, `NotFoundError(ref)`, `StoreError`.
+  - `src/ai_checkpoint/model.py`: dataclasses `Checkpoint`, `Decision`, `VerbatimItem`, `LastExchange`; `Checkpoint.from_dict` is the single validator (errors name the field, e.g. `verbatim[0].label`); `to_dict` emits every key; `INPUT_FIELDS`/`SECTION_FIELDS` constants for F-002's tool schema.
+  - `src/ai_checkpoint/redact.py`: `redact_text`/`redact_obj` (sk-/sk-ant-, ghp_/github_pat_, AKIA/ASIA, AIza, xox*, PEM private keys, `Bearer x`, `api_key=`/`token=`/`password=`/`secret=` assignments incl. quoted and JSON `"password": "x"`). Replaces only the secret with `[REDACTED]`.
+  - `src/ai_checkpoint/brief.py`: stub hook. `estimate_tokens` (ceil(chars/4)) and `render_brief(cp)` (plain placeholder rendering of all sections). F-002 should replace `render_brief` body keeping the signature `render_brief(cp: Checkpoint) -> str`; `GitStore.list` calls it via the module (so listings pick up the real brief, token counts included).
+  - `src/ai_checkpoint/store.py`: `GitStore(root=None, clock=None)` with `save(dict|Checkpoint) -> SaveResult(checkpoint_id, commit, checkpoint)`, `resolve(ref) -> id`, `get(ref) -> Checkpoint`, `list(chat_name=None) -> Listing` (`.checkpoints` newest first, `.chats` grouped dict, `.to_dict()`), `path_for(id)`, `default_root()`.
+  - `src/ai_checkpoint/__init__.py`: public exports (no mcp/anthropic/openai import).
+  - `tests/conftest.py`, `tests/test_store.py`: 38 tests covering each acceptance criterion.
+- How to run it: `pip install -e .[dev]` then `pytest`. Example: `AI_CHECKPOINT_HOME=/tmp/x python -c "from ai_checkpoint import GitStore; print(GitStore().save({...}))"`.
+- Tests: `python3 -m pytest -q` -> 38 passed (offline, ~1s). `pip install -e .` succeeds.
+- User-visible changes: None (new package). Console scripts (`ai-checkpoint`, `ai-checkpoint-mcp`, `checkpoint-eval`) are deliberately not declared yet because their modules do not exist; F-002/F-003 add them to `[project.scripts]`.
+- Notes:
+  - Stack: stdlib + system `git` via subprocess (no GitPython), src layout, setuptools.
+  - Next id = max(files on disk, ids found in `git log --name-only`) + 1, so ids survive deleted files. Saves are serialised with an flock on `.git/ai-checkpoint.lock` (no-op without fcntl). Commits pass `-c user.name/user.email/commit.gpgsign=false --no-verify`, so no global git config is needed; GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE are stripped from git's env. If git fails after the file is written, the file is removed and unstaged.
+  - Redaction runs before validation, on all string fields including names (so commit messages are clean); `resumed_from` is exempt and resolved raw. Heuristics to avoid code false positives: `token=get_token()`, `max_tokens=1000`, `token=$VAR`, `<placeholder>`, `None/true/false` and lowercase-word `Bearer authentication` are left alone. Best effort only.
+  - Validation choices (spec silent): chat_name may not contain `/`; names may not contain control chars/newlines or look like `cp-NNN`; optional fields accept `null` as default; list items and decision/verbatim fields must be non-empty strings; unknown input keys are ignored; caller-supplied `checkpoint_id`/`created_at` are overwritten.
+  - Ref resolution: id (`cp-7` is normalised to `cp-007`), then `chat/name`, then bare name (newest wins across chats), with a case-insensitive fallback if nothing matches exactly. Ordering is by id (not timestamp).
+  - Corrupt/unreadable checkpoint files are skipped when listing/resolving rather than failing.
+  - Deferred: delete/update (out of scope), real brief wording (F-002).

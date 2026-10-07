@@ -1,0 +1,251 @@
+"""Checkpoint data model and validation. Stdlib only.
+
+``Checkpoint.from_dict`` is the single validation entry point. Errors are
+``ValidationError`` with ``.field`` naming the offending field, e.g.
+``next_steps``, ``verbatim[0].label``.
+"""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from typing import Any, Mapping, Optional
+
+from .errors import ValidationError
+
+ID_RE = re.compile(r"^cp-(\d+)$", re.IGNORECASE)
+_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+#: Section names in the fixed order used for storage and (later) briefs.
+SECTION_FIELDS = (
+    "objective",
+    "context",
+    "decisions",
+    "completed",
+    "current_step",
+    "next_steps",
+    "open_questions",
+    "verbatim",
+    "last_exchange",
+    "notes_for_next_ai",
+)
+METADATA_FIELDS = (
+    "chat_name",
+    "checkpoint_name",
+    "checkpoint_id",
+    "created_at",
+    "client",
+    "resumed_from",
+)
+#: Keys a caller supplies when saving (ids/timestamps are assigned by the store).
+INPUT_FIELDS = tuple(
+    f for f in METADATA_FIELDS + SECTION_FIELDS if f not in ("checkpoint_id", "created_at")
+)
+
+
+def format_id(n: int) -> str:
+    return f"cp-{n:03d}"
+
+
+def id_number(checkpoint_id: str) -> int:
+    m = ID_RE.match(checkpoint_id)
+    if not m:
+        raise ValueError(f"not a checkpoint id: {checkpoint_id!r}")
+    return int(m.group(1))
+
+
+@dataclass
+class Decision:
+    decision: str
+    reason: str
+
+
+@dataclass
+class VerbatimItem:
+    label: str
+    content: str
+
+
+@dataclass
+class LastExchange:
+    user: str = ""
+    assistant: str = ""
+
+
+@dataclass
+class Checkpoint:
+    chat_name: str
+    checkpoint_name: str
+    objective: str
+    current_step: str
+    next_steps: list = field(default_factory=list)
+    context: str = ""
+    decisions: list = field(default_factory=list)
+    completed: list = field(default_factory=list)
+    open_questions: list = field(default_factory=list)
+    verbatim: list = field(default_factory=list)
+    last_exchange: LastExchange = field(default_factory=LastExchange)
+    notes_for_next_ai: str = ""
+    client: str = "unknown"
+    resumed_from: Optional[str] = None
+    checkpoint_id: str = ""
+    created_at: str = ""
+
+    # ------------------------------------------------------------------ io
+    def to_dict(self) -> dict:
+        """JSON-ready dict containing every key (metadata first, then sections)."""
+        return {
+            "checkpoint_id": self.checkpoint_id,
+            "chat_name": self.chat_name,
+            "checkpoint_name": self.checkpoint_name,
+            "created_at": self.created_at,
+            "client": self.client,
+            "resumed_from": self.resumed_from,
+            "objective": self.objective,
+            "context": self.context,
+            "decisions": [{"decision": d.decision, "reason": d.reason} for d in self.decisions],
+            "completed": list(self.completed),
+            "current_step": self.current_step,
+            "next_steps": list(self.next_steps),
+            "open_questions": list(self.open_questions),
+            "verbatim": [{"label": v.label, "content": v.content} for v in self.verbatim],
+            "last_exchange": {
+                "user": self.last_exchange.user,
+                "assistant": self.last_exchange.assistant,
+            },
+            "notes_for_next_ai": self.notes_for_next_ai,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "Checkpoint":
+        """Validate ``data`` and build a Checkpoint. Unknown keys are ignored.
+
+        ``None`` for an optional field means "use the default".
+        """
+        if not isinstance(data, Mapping):
+            raise ValidationError("checkpoint", "must be an object")
+        g = data.get
+        return cls(
+            chat_name=_name(g("chat_name"), "chat_name", allow_slash=False),
+            checkpoint_name=_name(g("checkpoint_name"), "checkpoint_name", allow_slash=True),
+            objective=_req_str(g("objective"), "objective"),
+            current_step=_req_str(g("current_step"), "current_step"),
+            next_steps=_str_list(g("next_steps"), "next_steps", required=True),
+            context=_opt_str(g("context"), "context"),
+            decisions=_decisions(g("decisions")),
+            completed=_str_list(g("completed"), "completed"),
+            open_questions=_str_list(g("open_questions"), "open_questions"),
+            verbatim=_verbatim(g("verbatim")),
+            last_exchange=_last_exchange(g("last_exchange")),
+            notes_for_next_ai=_opt_str(g("notes_for_next_ai"), "notes_for_next_ai"),
+            client=_opt_str(g("client"), "client") or "unknown",
+            resumed_from=_opt_ref(g("resumed_from")),
+            checkpoint_id=_opt_str(g("checkpoint_id"), "checkpoint_id"),
+            created_at=_opt_str(g("created_at"), "created_at"),
+        )
+
+
+# ------------------------------------------------------------- validators
+def _type_name(v: Any) -> str:
+    return "null" if v is None else type(v).__name__
+
+
+def _req_str(v: Any, name: str) -> str:
+    if v is None:
+        raise ValidationError(name, "is required")
+    if not isinstance(v, str):
+        raise ValidationError(name, f"must be a string, got {_type_name(v)}")
+    if not v.strip():
+        raise ValidationError(name, "must not be empty")
+    return v
+
+
+def _opt_str(v: Any, name: str) -> str:
+    if v is None:
+        return ""
+    if not isinstance(v, str):
+        raise ValidationError(name, f"must be a string, got {_type_name(v)}")
+    return v
+
+
+def _name(v: Any, name: str, *, allow_slash: bool) -> str:
+    s = _req_str(v, name).strip()
+    if _CONTROL_RE.search(s):
+        raise ValidationError(name, "must not contain control characters or newlines")
+    if not allow_slash and "/" in s:
+        raise ValidationError(name, "must not contain '/'")
+    if ID_RE.match(s):
+        raise ValidationError(name, "must not look like a checkpoint id (cp-NNN)")
+    return s
+
+
+def _opt_ref(v: Any) -> Optional[str]:
+    if v is None:
+        return None
+    if not isinstance(v, str):
+        raise ValidationError("resumed_from", f"must be a string, got {_type_name(v)}")
+    return v.strip() or None
+
+
+def _str_list(v: Any, name: str, *, required: bool = False) -> list:
+    if v is None:
+        if required:
+            raise ValidationError(name, "is required")
+        return []
+    if not isinstance(v, (list, tuple)):
+        raise ValidationError(name, f"must be a list of strings, got {_type_name(v)}")
+    if required and not v:
+        raise ValidationError(name, "must not be empty")
+    out = []
+    for i, item in enumerate(v):
+        if not isinstance(item, str):
+            raise ValidationError(f"{name}[{i}]", f"must be a string, got {_type_name(item)}")
+        if not item.strip():
+            raise ValidationError(f"{name}[{i}]", "must not be empty")
+        out.append(item)
+    return out
+
+
+def _obj_list(v: Any, name: str) -> list:
+    if v is None:
+        return []
+    if not isinstance(v, (list, tuple)):
+        raise ValidationError(name, f"must be a list of objects, got {_type_name(v)}")
+    for i, item in enumerate(v):
+        if not isinstance(item, Mapping):
+            raise ValidationError(f"{name}[{i}]", f"must be an object, got {_type_name(item)}")
+    return list(v)
+
+
+def _decisions(v: Any) -> list:
+    out = []
+    for i, item in enumerate(_obj_list(v, "decisions")):
+        out.append(
+            Decision(
+                decision=_req_str(item.get("decision"), f"decisions[{i}].decision"),
+                reason=_req_str(item.get("reason"), f"decisions[{i}].reason"),
+            )
+        )
+    return out
+
+
+def _verbatim(v: Any) -> list:
+    out = []
+    for i, item in enumerate(_obj_list(v, "verbatim")):
+        out.append(
+            VerbatimItem(
+                label=_req_str(item.get("label"), f"verbatim[{i}].label"),
+                content=_req_str(item.get("content"), f"verbatim[{i}].content"),
+            )
+        )
+    return out
+
+
+def _last_exchange(v: Any) -> LastExchange:
+    if v is None:
+        return LastExchange()
+    if not isinstance(v, Mapping):
+        raise ValidationError("last_exchange", f"must be an object, got {_type_name(v)}")
+    return LastExchange(
+        user=_opt_str(v.get("user"), "last_exchange.user"),
+        assistant=_opt_str(v.get("assistant"), "last_exchange.assistant"),
+    )

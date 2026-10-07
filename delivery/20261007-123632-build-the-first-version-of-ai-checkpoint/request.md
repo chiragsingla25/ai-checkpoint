@@ -1,0 +1,3 @@
+# Request
+
+Build the first version of AI Checkpoint as described in docs/IDEA.md (section 'First build scope'): (1) the checkpoint format with validation and local storage in ~/.ai-checkpoint (overridable) with one git commit per save, (2) a local stdio MCP server exposing save_checkpoint, list_checkpoints, get_checkpoint, resume_checkpoint and a 'resume' MCP prompt, plus a thin CLI for testing, (3) a handover evaluation kit comparing checkpoint vs plain summary vs full history (offline-testable with a fake model; real Anthropic/OpenAI adapters used only when an API key is set). Python. Everything in docs/ROADMAP.md is out of scope.
