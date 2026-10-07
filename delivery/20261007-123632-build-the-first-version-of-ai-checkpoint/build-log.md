@@ -45,3 +45,28 @@
 - Tests: python3 -m pytest -q (full suite) - see result below
 - User-visible changes: GitStore.save([]) reports "chat_name: is required" again (F-001 behaviour); otherwise none.
 - Notes: none
+
+## F-003 attempt 1
+- What changed:
+  - `src/ai_checkpoint/schema.py` (new, stdlib): `SAVE_INSTRUCTIONS`, `SAVE_DESCRIPTION`, `FIELD_DESCRIPTIONS`, `compaction_system_prompt()`; single source for the tool text and the eval's compaction prompt.
+  - `src/ai_checkpoint/server.py`: now takes the `save_checkpoint` description and every field description from `schema.py` (text unchanged, so the MCP schema is identical).
+  - `src/ai_checkpoint/eval/`: `scenario.py` (format + validation, `ScenarioError`), `models.py` (`Model` protocol, deterministic `FakeModel`, lazy `AnthropicModel`/`OpenAIModel`, `make_model`), `pipeline.py` (three variants, fresh-call probes, judge, aggregates), `report.py` (results.json, results.md, handovers), `cli.py`, `__main__.py`, `__init__.py`.
+  - `examples/scenarios/invoice-sync.json` (19 messages, 7 probes, coding) and `delivery-restructure.json` (17 messages, 7 probes, planning).
+  - `pyproject.toml`: `checkpoint-eval` console script. `README.md`: eval section (offline, real models, metrics, scenario format).
+  - `tests/test_eval.py`: 40 tests.
+- How to run it: `checkpoint-eval run examples/scenarios/invoice-sync.json --model fake --out out/` (or `python -m ai_checkpoint.eval run ...`); real: `pip install -e .[anthropic]`, set `ANTHROPIC_API_KEY`, `--model anthropic`.
+- Tests: `python3 -m pytest -q` -> 107 passed (offline; sockets are patched to fail in test_eval.py).
+- User-visible changes: None to existing commands. New command `checkpoint-eval`; the `save_checkpoint` tool text is byte-identical (now defined in `schema.py`).
+- Notes:
+  - Default models `claude-sonnet-5-5` and `gpt-5`; override with `--model-name` or `CHECKPOINT_EVAL_ANTHROPIC_MODEL`/`CHECKPOINT_EVAL_OPENAI_MODEL`. Real adapters were only tested against stub SDK modules (no keys here); the same model does compaction, summary, answers and judging.
+  - Compaction for non-tool models is "reply with one JSON object"; markdown code fences are tolerated. `resumed_from` is deliberately left out of the eval prompt. Compaction validation/JSON failures are recorded per variant; model/API failures abort the run with `error:` and exit 1.
+  - Spec silent: optional probe fields `reference` (default: key facts joined), `must_not_contradict`, `known_wrong`; the FakeModel judge only detects contradictions via `known_wrong`, so fake contradiction counts are mostly 0. Scenario files that fail validation, and run-time errors, exit 1. Extra output files `handover_<variant>.md` are written beside results. Aggregate recall is the mean over probes; probes with an unusable judge reply are excluded and counted in `probes_scored`.
+  - Fake scores (e.g. checkpoint 24%/45%, full history 45%/51%) only prove the pipeline runs.
+  - One scenario per run; no multi-scenario aggregation (deferred).
+
+## F-003 attempt 2
+- What changed: `src/ai_checkpoint/schema.py` restored the blank line before "Pick a short, descriptive `checkpoint_name`" so `SAVE_DESCRIPTION` is byte-identical to HEAD (1676 bytes, sha256 38f2a104...af52f, verified against a `git archive HEAD` copy of the server). `tests/test_eval.py`: new tests pinning the description by length and sha256 frozen from HEAD (both `SAVE_DESCRIPTION` and the registered MCP tool), plus the paragraph break itself. `src/ai_checkpoint/eval/pipeline.py`: `_compaction_handover` also catches `RecursionError`, so deeply nested compaction JSON is recorded as a failed variant (QA note; new test).
+- How to run it: unchanged
+- Tests: `python3 -m pytest -q` -> 110 passed.
+- User-visible changes: None versus HEAD (the save_checkpoint text now really is unchanged).
+- Notes: Not done (outside F-003): double space in the brief header "from checkpoint  (...)" when the eval has no checkpoint id lives in F-002 `brief.py`; terse key facts in the example scenarios left as is. Process slip: I ran `git stash` by mistake and immediately `git stash pop`; working tree restored intact.

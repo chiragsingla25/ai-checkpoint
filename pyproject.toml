@@ -19,6 +19,7 @@ dev = ["pytest"]
 [project.scripts]
 ai-checkpoint = "ai_checkpoint.cli:main"
 ai-checkpoint-mcp = "ai_checkpoint.server:main"
+checkpoint-eval = "ai_checkpoint.eval.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

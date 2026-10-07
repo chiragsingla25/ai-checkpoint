@@ -69,3 +69,88 @@ and a closing instruction to confirm the current step with the user. Verbatim
 items and the last exchange are in fenced blocks (fence longer than any
 backtick run inside) and reproduced byte for byte. Empty sections show
 `_(none recorded)_`. Size estimate (`brief_tokens`): characters / 4, rounded up.
+
+## Handover evaluation kit
+
+`checkpoint-eval` (or `python -m ai_checkpoint.eval`) measures how well a new
+chat can continue the work from three kinds of handover, built from the same
+conversation:
+
+- `checkpoint`: a model call fills the checkpoint schema (the compaction prompt is
+  generated from the same text as the `save_checkpoint` tool, `ai_checkpoint/schema.py`),
+  the result is validated and rendered as the resume brief. If the output fails
+  validation the variant is recorded as `failed` with the error.
+- `summary`: a plain free-form summary from one model call.
+- `full_history`: the raw conversation.
+
+Each probe question is then asked in a fresh call that sees only the handover text
+and the question; a judge call scores the answer.
+
+Offline (deterministic fake model, no network, no API keys):
+
+```
+checkpoint-eval run examples/scenarios/invoice-sync.json --model fake --out out/
+checkpoint-eval run examples/scenarios/delivery-restructure.json --model fake --out out2/
+```
+
+Two offline runs of the same scenario give identical files. Fake scores only prove
+the pipeline works; they say nothing about real models.
+
+With real models (the SDKs are optional extras, imported only when selected):
+
+```
+pip install -e .[anthropic]            # or .[openai]
+export ANTHROPIC_API_KEY=...           # or OPENAI_API_KEY
+checkpoint-eval run examples/scenarios/invoice-sync.json --model anthropic --out out/
+checkpoint-eval run examples/scenarios/invoice-sync.json --model openai --model-name <model-id> --out out/
+```
+
+Default model ids are `claude-sonnet-5-5` (anthropic) and `gpt-5` (openai). Override with
+`--model-name`, or the env vars `CHECKPOINT_EVAL_ANTHROPIC_MODEL` /
+`CHECKPOINT_EVAL_OPENAI_MODEL` (the flag wins). The same model compacts, summarises,
+answers and judges. A missing key or SDK prints a message naming it and exits 1.
+Real runs make many calls (1 compaction + 1 summary + 3 x probes answers + 3 x probes
+judgements, about 45 for the shipped scenarios).
+
+Output in `--out`: `results.json` (per variant and probe: answer, per-fact judgement,
+recall, contradictions; per-variant aggregates), `results.md` (the table, also printed),
+and `handover_<variant>.md` (the exact handover text each variant used).
+
+Metrics (per variant, averaged or summed over probes):
+
+- **key-fact recall**: fraction of a probe's `key_facts` that the answer states, judged
+  per fact; the table shows the mean over probes. Higher is better. Exact values (numbers,
+  code, names) must match.
+- **contradictions**: number of statements in answers that contradict the reference, the
+  key facts or `must_not_contradict`, or assert something from `known_wrong` (for example a
+  rejected option presented as chosen). Summed over probes. Lower is better; omissions do
+  not count.
+- **brief tokens**: estimated size of the handover (characters / 4). The cost side: the
+  full history is the ceiling, a good checkpoint should recall nearly as much in far fewer.
+
+A variant that failed (bad compaction output) shows `n/a`. If the judge reply is unusable
+for a probe, that probe is excluded from the averages (see `probes_scored`).
+
+### Scenario file format
+
+```json
+{
+  "name": "optional-short-name",
+  "description": "optional",
+  "messages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}],
+  "probes": [
+    {
+      "question": "asked in a fresh chat with only the handover",
+      "key_facts": ["facts a correct answer contains"],
+      "reference": "optional reference answer (default: key facts joined)",
+      "must_not_contradict": ["optional true statements"],
+      "known_wrong": ["optional plausible wrong claims"]
+    }
+  ]
+}
+```
+
+`messages` must be non-empty with `role` of `user` or `assistant`; `probes` must be non-empty and
+every probe needs a `question` and at least one `key_facts` entry. A malformed file gives an error
+naming the field (for example `probes[2].key_facts: must not be empty`) and exit code 1. The fake
+judge matches key facts by wording and `known_wrong` by substring; real judges read meaning.

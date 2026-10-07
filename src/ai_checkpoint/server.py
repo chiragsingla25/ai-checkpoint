@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from .brief import estimate_tokens, render_brief
 from .errors import CheckpointError
+from .schema import FIELD_DESCRIPTIONS, SAVE_DESCRIPTION
 from .store import GitStore
 
 SERVER_NAME = "ai-checkpoint"
@@ -33,51 +34,22 @@ SERVER_INSTRUCTIONS = (
     "follow the brief it returns."
 )
 
-SAVE_DESCRIPTION = """\
-Save this chat as a named checkpoint so the user can resume it later in a brand-new chat \
-(possibly in a different AI app). You are the compactor: you have the whole conversation \
-in context, and the next chat will have ONLY what you write here, nothing else.
-
-How to fill it in:
-- Fill EVERY section, using the WHOLE conversation from its start, not just the last few \
-messages. Do not leave a section empty if the conversation has anything for it.
-- Put code, commands, numbers, formulas, file contents, prompts, names, URLs and any exact \
-wording the work depends on into `verbatim`, character for character, each with a short \
-label. Never summarise or paraphrase inside `verbatim`; copy it.
-- Copy the last user message and your last reply into `last_exchange` word for word.
-- Write for a reader who has seen none of this chat: spell out what "it", "the file" and \
-"the previous approach" refer to, and record the reason behind each decision so settled \
-questions are not reopened.
-- Never invent anything. If something was not said or decided in the conversation, leave it \
-out or list it under `open_questions`. Do not guess file contents, numbers or intentions.
-- Do not include secrets (API keys, passwords, tokens); describe where they live instead.
-- `current_step` is the exact step the chat was on at this moment, and `next_steps` are \
-ordered, concrete instructions the next AI can follow without asking.
-
-Pick a short, descriptive `checkpoint_name` (for example "forecasting-v2"). If this chat was \
-itself resumed from a checkpoint, pass that checkpoint's id as `resumed_from` so the \
-checkpoints form a branch tree. Returns the new checkpoint id and the git commit hash.\
-"""
+FD = FIELD_DESCRIPTIONS
 
 
 class DecisionIn(BaseModel):
-    decision: str = Field(description="What was decided, stated plainly.")
-    reason: str = Field(description="Why it was decided, including options that were rejected.")
+    decision: str = Field(description=FD["decisions.decision"])
+    reason: str = Field(description=FD["decisions.reason"])
 
 
 class VerbatimIn(BaseModel):
-    label: str = Field(description="Short label saying what this is, e.g. 'SQL query' or 'system prompt'.")
-    content: str = Field(
-        description="The exact text, copied character for character (code, numbers, wording, "
-        "file contents). Never paraphrase or abbreviate."
-    )
+    label: str = Field(description=FD["verbatim.label"])
+    content: str = Field(description=FD["verbatim.content"])
 
 
 class LastExchangeIn(BaseModel):
-    user: str = Field(default="", description="The last user message, word for word.")
-    assistant: str = Field(
-        default="", description="Your most recent reply, word for word (before this save)."
-    )
+    user: str = Field(default="", description=FD["last_exchange.user"])
+    assistant: str = Field(default="", description=FD["last_exchange.assistant"])
 
 
 def _wrap(fn):
@@ -97,20 +69,20 @@ def create_server(store: Optional[GitStore] = None):
 
     @mcp.tool(description=SAVE_DESCRIPTION)
     def save_checkpoint(
-        chat_name: str = Field(description="Name of this chat/project (no '/'). Checkpoints of one chat are grouped under it."),
-        checkpoint_name: str = Field(description="Short name for this restore point, e.g. 'forecasting-v2'."),
-        objective: str = Field(description="What the work is for: the goal this whole chat is serving."),
-        current_step: str = Field(description="The exact step the chat was on when saved: what was being done, and how far it got."),
-        next_steps: List[str] = Field(description="Ordered, concrete instructions for continuing from the current step. At least one."),
-        context: str = Field(default="", description="Background facts, constraints, environment and preferences the user stated that the next AI must respect."),
-        decisions: List[DecisionIn] = Field(default_factory=list, description="Each decision made, with its reason, so settled questions are not reopened."),
-        completed: List[str] = Field(default_factory=list, description="What is already done."),
-        open_questions: List[str] = Field(default_factory=list, description="Unresolved questions or items still waiting on the user."),
-        verbatim: List[VerbatimIn] = Field(default_factory=list, description="Material that must not be paraphrased: code, numbers, exact wording, file contents. Each with a label."),
-        last_exchange: LastExchangeIn = Field(default_factory=LastExchangeIn, description="The last user message and the last assistant reply, word for word."),
-        notes_for_next_ai: str = Field(default="", description="Anything else the next AI must know that fits no other section: pitfalls, user's style, things already tried."),
-        client: Optional[str] = Field(default=None, description="The app this chat is in, e.g. 'claude.ai', 'chatgpt', 'claude-code'."),
-        resumed_from: Optional[str] = Field(default=None, description="Id of the checkpoint this chat was resumed from (e.g. 'cp-007'), if any. Must exist."),
+        chat_name: str = Field(description=FD["chat_name"]),
+        checkpoint_name: str = Field(description=FD["checkpoint_name"]),
+        objective: str = Field(description=FD["objective"]),
+        current_step: str = Field(description=FD["current_step"]),
+        next_steps: List[str] = Field(description=FD["next_steps"]),
+        context: str = Field(default="", description=FD["context"]),
+        decisions: List[DecisionIn] = Field(default_factory=list, description=FD["decisions"]),
+        completed: List[str] = Field(default_factory=list, description=FD["completed"]),
+        open_questions: List[str] = Field(default_factory=list, description=FD["open_questions"]),
+        verbatim: List[VerbatimIn] = Field(default_factory=list, description=FD["verbatim"]),
+        last_exchange: LastExchangeIn = Field(default_factory=LastExchangeIn, description=FD["last_exchange"]),
+        notes_for_next_ai: str = Field(default="", description=FD["notes_for_next_ai"]),
+        client: Optional[str] = Field(default=None, description=FD["client"]),
+        resumed_from: Optional[str] = Field(default=None, description=FD["resumed_from"]),
     ) -> dict[str, Any]:
         data = dict(
             chat_name=chat_name, checkpoint_name=checkpoint_name, objective=objective,

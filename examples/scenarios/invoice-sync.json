@@ -1,0 +1,163 @@
+{
+  "name": "invoice-sync-rate-limit",
+  "description": "Multi-step coding task: fix HTTP 429 failures and duplicate rows in a nightly sync job. Exact code, numbers, a rejected option (tenacity) and the reason for it must survive the handover.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "I maintain a small Python service called invoice-sync that pulls invoices from a vendor's REST API (Ledgerly) every night and loads them into our Postgres 15 database. Since last Tuesday the nightly job has been failing roughly one night in three with HTTP 429 responses, and when it does fail we end up with duplicate rows in the invoices table, which finance has already complained about. I need you to help me fix both problems. The service runs as a Kubernetes CronJob at 02:15 UTC, Python 3.11, requests + psycopg2. I can't change the vendor's API and I can't add new infrastructure (no Redis, no queue), because the platform team froze our namespace until the end of the quarter."
+    },
+    {
+      "role": "assistant",
+      "content": "Understood. Two separate problems with one trigger: the 429s come from hitting Ledgerly too fast, and the duplicates come from the load step not being idempotent, so a retry or a re-run inserts the same invoice again. Before changing anything I'd like to see (1) how you call the API today, (2) the insert code, and (3) the response headers on a 429 if you have a log of one. Ledgerly often sends a Retry-After header, and honouring that is better than guessing a delay."
+    },
+    {
+      "role": "user",
+      "content": "Here is the fetch code:\n\n```python\ndef fetch_page(session, page):\n    r = session.get(f\"{BASE}/v2/invoices\", params={\"page\": page, \"per_page\": 200, \"updated_since\": SINCE})\n    r.raise_for_status()\n    return r.json()[\"items\"]\n```\n\nand the load code:\n\n```python\ndef load(conn, items):\n    with conn.cursor() as cur:\n        for it in items:\n            cur.execute(\n                \"INSERT INTO invoices (vendor_invoice_id, customer_id, amount_cents, currency, issued_at) VALUES (%s, %s, %s, %s, %s)\",\n                (it[\"id\"], it[\"customer\"], it[\"amount_cents\"], it[\"currency\"], it[\"issued_at\"]),\n            )\n    conn.commit()\n```\n\nA 429 from the logs looked like this: `HTTP/1.1 429 Too Many Requests`, `Retry-After: 30`, `X-RateLimit-Limit: 60`, `X-RateLimit-Remaining: 0`. So the limit is 60 requests per minute. We usually fetch around 90 pages on a busy night."
+    },
+    {
+      "role": "assistant",
+      "content": "That explains the pattern: 90 pages in a tight loop exceeds 60 requests per minute, and on quiet nights you stay under it. Plan:\n\n1. Client side: a small throttle so we never exceed the limit, plus retry on 429 that honours `Retry-After`. Throttle to 50 requests per minute rather than 60, to leave headroom for clock skew between us and the vendor.\n2. Idempotent load: add a UNIQUE constraint on `vendor_invoice_id` and switch to `INSERT ... ON CONFLICT (vendor_invoice_id) DO UPDATE`, so re-runs update instead of duplicating.\n3. Clean up the existing duplicates first, otherwise the constraint creation will fail.\n\nOne question: when two rows share a vendor_invoice_id today, which one should survive?"
+    },
+    {
+      "role": "user",
+      "content": "Keep the most recently inserted one, i.e. the highest `id` (our serial primary key). The older ones can go. Also finance said some of the duplicates have slightly different amount_cents because the vendor corrected the amount between runs, so the latest is the right one."
+    },
+    {
+      "role": "assistant",
+      "content": "Good, that means the highest `id` per vendor_invoice_id is the survivor. Here is the migration, to run in one transaction:\n\n```sql\nBEGIN;\nDELETE FROM invoices a\nUSING invoices b\nWHERE a.vendor_invoice_id = b.vendor_invoice_id\n  AND a.id < b.id;\nALTER TABLE invoices\n  ADD CONSTRAINT invoices_vendor_invoice_id_key UNIQUE (vendor_invoice_id);\nCOMMIT;\n```\n\nTake a `pg_dump -t invoices` backup first. I'd like to try it on a copy before production. The load function then becomes:\n\n```python\nUPSERT = '''\nINSERT INTO invoices (vendor_invoice_id, customer_id, amount_cents, currency, issued_at)\nVALUES (%s, %s, %s, %s, %s)\nON CONFLICT (vendor_invoice_id) DO UPDATE SET\n  customer_id = EXCLUDED.customer_id,\n  amount_cents = EXCLUDED.amount_cents,\n  currency = EXCLUDED.currency,\n  issued_at = EXCLUDED.issued_at\n'''\n```"
+    },
+    {
+      "role": "user",
+      "content": "Migration looks right to me. For the retry logic: my teammate Priya suggested we use the `tenacity` library with exponential backoff. What do you think? I'm not against it but I'd rather not add a dependency if it's easy without."
+    },
+    {
+      "role": "assistant",
+      "content": "I'd skip tenacity here, for two reasons. First, exponential backoff ignores what the server told us: Ledgerly tells us exactly how long to wait in `Retry-After`, and a generic exponential schedule would either wait too little (and get another 429) or too long (and risk the job's time limit). Second, the logic is about 20 lines, and your CronJob image is minimal, so avoiding a new dependency means no change to requirements and image rebuild. So: stdlib only, honour Retry-After, fall back to 30 seconds if the header is missing, and give up after 5 attempts per page.\n\n```python\nimport time\n\nMAX_ATTEMPTS = 5\nMIN_INTERVAL = 60 / 50  # 50 requests per minute -> 1.2 s between requests\n_last = [0.0]\n\ndef throttled_get(session, url, **kw):\n    for attempt in range(1, MAX_ATTEMPTS + 1):\n        wait = MIN_INTERVAL - (time.monotonic() - _last[0])\n        if wait > 0:\n            time.sleep(wait)\n        _last[0] = time.monotonic()\n        r = session.get(url, timeout=30, **kw)\n        if r.status_code != 429:\n            r.raise_for_status()\n            return r\n        time.sleep(float(r.headers.get(\"Retry-After\", 30)))\n    raise RuntimeError(f\"gave up after {MAX_ATTEMPTS} attempts: {url}\")\n```"
+    },
+    {
+      "role": "user",
+      "content": "Makes sense, I'll tell Priya. One thing: the timeout of 30 seconds, is that OK? The vendor's slowest page took 22 seconds in the logs last week. Also, I realised there's a second constraint: the CronJob has `activeDeadlineSeconds: 1800` so the whole run must finish within 30 minutes."
+    },
+    {
+      "role": "assistant",
+      "content": "30 seconds is fine given a 22 second worst case, but it is tight. I'd use 45 for the read timeout so one slow page does not burn an attempt. Now check the deadline arithmetic: 90 pages at 1.2 seconds is 108 seconds of throttle delay, plus fetch time (say 2 seconds average per page = 180 seconds), so about 5 minutes on a normal night. A night with several 429s adds up to 5 x 30 seconds per page in the worst case, but realistically a handful of 30 second waits. We have plenty of margin under 1800 seconds, so I would not parallelise; that would only make the rate limit worse."
+    },
+    {
+      "role": "user",
+      "content": "Agreed, no parallelism. I ran the migration on a copy of the database and it removed 412 duplicate rows out of 18,930, leaving 18,518. Constraint created fine. Now I'm going to run the new code against Ledgerly's sandbox. Before that, one more request: finance wants the job to log a one-line summary at the end with the number of pages fetched, rows inserted, rows updated, and the number of 429s it hit. Can you add that?"
+    },
+    {
+      "role": "assistant",
+      "content": "Congratulations on the clean migration; 18,930 - 412 = 18,518 checks out. For the summary, Postgres can tell us inserted vs updated in one statement if we add `RETURNING (xmax = 0) AS inserted` to the upsert: `xmax = 0` is true for a freshly inserted row and false for a row that was updated by ON CONFLICT. Then count them in Python. For 429s, keep a module level counter that `throttled_get` increments.\n\n```python\nstats = {\"pages\": 0, \"inserted\": 0, \"updated\": 0, \"rate_limited\": 0}\n\n# in throttled_get, inside the 429 branch:\nstats[\"rate_limited\"] += 1\n\n# in load(), UPSERT now ends with:  RETURNING (xmax = 0) AS inserted\ncur.execute(UPSERT, params)\nif cur.fetchone()[0]:\n    stats[\"inserted\"] += 1\nelse:\n    stats[\"updated\"] += 1\n\n# at the end of main():\nlog.info(\"invoice-sync done pages=%d inserted=%d updated=%d rate_limited=%d\", **stats)\n```\n\nI changed the read timeout to 45 seconds in the final version of `throttled_get` as discussed; I will paste the full file once you confirm the sandbox run."
+    },
+    {
+      "role": "user",
+      "content": "Sandbox run result: pages=3 inserted=250 updated=0 rate_limited=0 on the first run, and on the second run pages=3 inserted=0 updated=250 rate_limited=0. So idempotency works. But I forced a 429 by lowering the sandbox limit and the job slept for 30 seconds even though the sandbox sent `Retry-After: 3`. Looks like the header isn't being read."
+    },
+    {
+      "role": "assistant",
+      "content": "Good catch from the test, and it fits what the sandbox does: some servers send `Retry-After` with a different capitalisation, but `requests` headers are case-insensitive, so that is not it. More likely the sandbox sends the value in HTTP-date format or the header is on a different response. Can you paste the raw 429 response headers from the sandbox? My current guess is that the sandbox sends `retry-after: 3` only on 429 and we do read it, but the throttle `time.sleep(wait)` at the top of the next loop is not the problem either. I need the actual headers to stop guessing."
+    },
+    {
+      "role": "user",
+      "content": "Here are the headers: `HTTP/1.1 429`, `RateLimit-Reset: 3`, `X-Request-Id: 7f3a9c1e`. So no Retry-After at all in the sandbox, only RateLimit-Reset (seconds). Production sends Retry-After as I showed you earlier. Please make the code read either: Retry-After first, then RateLimit-Reset, then the 30 second default. Then I'll run it against production for tonight's real job and report back tomorrow morning."
+    },
+    {
+      "role": "assistant",
+      "content": "That fully explains it: the sandbox is simply not sending Retry-After, so our code correctly fell back to the 30 second default. Here is the wait calculation to use, replacing the `time.sleep(float(r.headers.get(\"Retry-After\", 30)))` line:\n\n```python\ndef retry_delay(headers):\n    for name in (\"Retry-After\", \"RateLimit-Reset\"):\n        value = headers.get(name)\n        if value is not None:\n            try:\n                return max(0.0, float(value))\n            except ValueError:\n                pass  # HTTP-date form is not supported; try the next header\n    return 30.0\n```\n\nand the loop uses `time.sleep(retry_delay(r.headers))`. I have not handled the HTTP-date form of Retry-After because Ledgerly has only ever sent seconds. Once the production run reports back, the remaining items are: a unit test for `retry_delay`, deploying the new image tag, and removing the temporary pg_dump backup after a week."
+    },
+    {
+      "role": "user",
+      "content": "Perfect. I'm applying that now and deploying tonight. Please write down the full final version of the file so I can paste it into the repo, with the 45 second timeout."
+    },
+    {
+      "role": "assistant",
+      "content": "Here is the final `sync.py` core, with everything from this conversation combined: 50 requests per minute (MIN_INTERVAL 1.2 s), up to 5 attempts per page, 45 second read timeout, Retry-After then RateLimit-Reset then 30 second fallback, and the stats line.\n\n```python\nimport time\n\nMAX_ATTEMPTS = 5\nMIN_INTERVAL = 60 / 50\n_last = [0.0]\nstats = {\"pages\": 0, \"inserted\": 0, \"updated\": 0, \"rate_limited\": 0}\n\ndef retry_delay(headers):\n    for name in (\"Retry-After\", \"RateLimit-Reset\"):\n        value = headers.get(name)\n        if value is not None:\n            try:\n                return max(0.0, float(value))\n            except ValueError:\n                pass\n    return 30.0\n\ndef throttled_get(session, url, **kw):\n    for attempt in range(1, MAX_ATTEMPTS + 1):\n        wait = MIN_INTERVAL - (time.monotonic() - _last[0])\n        if wait > 0:\n            time.sleep(wait)\n        _last[0] = time.monotonic()\n        r = session.get(url, timeout=45, **kw)\n        if r.status_code != 429:\n            r.raise_for_status()\n            return r\n        stats[\"rate_limited\"] += 1\n        time.sleep(retry_delay(r.headers))\n    raise RuntimeError(f\"gave up after {MAX_ATTEMPTS} attempts: {url}\")\n```\n\nRemember the UPSERT with `RETURNING (xmax = 0) AS inserted` goes in `load()`. Tomorrow, send me the end-of-run log line and we will decide whether the unit test for retry_delay is all that is left."
+    },
+    {
+      "role": "user",
+      "content": "Thanks. Deploying tonight at the next release window. Tomorrow I'll paste the log line."
+    }
+  ],
+  "probes": [
+    {
+      "question": "What is the vendor's rate limit, and what request rate did we decide to throttle to?",
+      "reference": "The vendor limit is 60 requests per minute; we throttle to 50 requests per minute (MIN_INTERVAL 60 / 50 = 1.2 seconds) to leave headroom.",
+      "key_facts": [
+        "60 requests per minute",
+        "50 requests per minute",
+        "1.2"
+      ],
+      "known_wrong": [
+        "60 requests per minute throttle"
+      ]
+    },
+    {
+      "question": "Which retry library did a teammate suggest, did we adopt it, and why or why not?",
+      "reference": "Priya suggested tenacity with exponential backoff. We rejected it: it ignores the server's Retry-After header, and avoiding the dependency means no change to requirements or image rebuild; we use about 20 lines of stdlib code instead.",
+      "key_facts": [
+        "tenacity",
+        "rejected",
+        "ignores Retry-After",
+        "no new dependency"
+      ],
+      "known_wrong": [
+        "we adopted tenacity",
+        "use tenacity"
+      ]
+    },
+    {
+      "question": "Exactly how do we decide how long to wait after a 429? Give the order of headers and the fallback.",
+      "reference": "Read Retry-After first, then RateLimit-Reset, then fall back to 30 seconds. HTTP-date form is not supported.",
+      "key_facts": [
+        "Retry-After",
+        "RateLimit-Reset",
+        "30"
+      ],
+      "must_not_contradict": [
+        "The sandbox sends RateLimit-Reset and not Retry-After"
+      ]
+    },
+    {
+      "question": "What was the duplicate cleanup rule, and how many rows were removed in the test on the database copy?",
+      "reference": "Keep the row with the highest id per vendor_invoice_id and delete the older ones, because finance said the latest amount is the corrected one. 412 duplicate rows were removed out of 18,930, leaving 18,518.",
+      "key_facts": [
+        "highest id",
+        "412",
+        "18,930",
+        "18,518"
+      ]
+    },
+    {
+      "question": "What read timeout does the final code use, and what was the reason it was changed from the first draft?",
+      "reference": "45 seconds. The first draft used 30 seconds, but the vendor's slowest page took 22 seconds, so 45 gives margin so one slow page does not use up an attempt.",
+      "key_facts": [
+        "45 seconds",
+        "22 seconds"
+      ],
+      "known_wrong": [
+        "timeout of 30 seconds is final"
+      ]
+    },
+    {
+      "question": "How does the upsert tell inserted rows from updated rows, and what does the end-of-run log line report?",
+      "reference": "The upsert ends with RETURNING (xmax = 0) AS inserted; true means inserted, false means updated. The log line reports pages, inserted, updated and rate_limited.",
+      "key_facts": [
+        "RETURNING (xmax = 0) AS inserted",
+        "pages",
+        "inserted",
+        "updated",
+        "rate_limited"
+      ]
+    },
+    {
+      "question": "What is still to be done, and what is the next thing the user will bring back?",
+      "reference": "The user deploys tonight and will paste the end-of-run log line tomorrow. Remaining: a unit test for retry_delay, deploying the new image tag, and removing the temporary pg_dump backup after a week.",
+      "key_facts": [
+        "unit test for retry_delay",
+        "log line",
+        "pg_dump backup"
+      ]
+    }
+  ]
+}
