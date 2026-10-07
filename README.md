@@ -7,6 +7,116 @@ See `docs/IDEA.md` for the idea.
 Checkpoints are JSON files in a local git repo (one commit per save). Store
 location: `~/.ai-checkpoint`, or `$AI_CHECKPOINT_HOME`.
 
+## For testers
+
+Thanks for trying AI Checkpoint. It saves a chat as a named checkpoint so you can resume it in a brand-new chat. You do not need to download this repo or know Python: `uvx` installs and runs it straight from GitHub.
+
+Repo: https://github.com/<owner>/ai-checkpoint
+
+### 1. Prerequisites
+
+- [uv](https://docs.astral.sh/uv/) (provides `uvx`)
+- [git](https://git-scm.com/downloads) (checkpoints are saved as commits in a small local git repo, so git must be installed)
+
+Install uv, then close and reopen your terminal.
+
+macOS (Terminal):
+
+```
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Check both are installed: `uvx --version` and `git --version`.
+
+### 2. Add it to your app
+
+All three apps use the same command and arguments:
+
+- command: `uvx`
+- args: `["--from", "ai-checkpoint[mcp] @ git+https://github.com/<owner>/ai-checkpoint", "ai-checkpoint-mcp"]`
+
+The first start downloads and builds it, which can take a minute. After that it starts fast.
+
+**Claude Desktop.** Easiest: in Claude Desktop open **Settings → Developer → Edit Config**, which opens the right file. Or open it yourself (create it if it does not exist):
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Paste this (if the file already has an `mcpServers` section, add just the `"ai-checkpoint"` entry inside it), save, then fully quit and reopen Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "ai-checkpoint": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "ai-checkpoint[mcp] @ git+https://github.com/<owner>/ai-checkpoint",
+        "ai-checkpoint-mcp"
+      ]
+    }
+  }
+}
+```
+
+**Claude Code** (any OS, one line):
+
+```
+claude mcp add -s user ai-checkpoint -- uvx --from "ai-checkpoint[mcp] @ git+https://github.com/<owner>/ai-checkpoint" ai-checkpoint-mcp
+```
+
+Then run `/mcp` inside Claude Code to confirm `ai-checkpoint` is connected.
+
+**Cursor.** Edit `~/.cursor/mcp.json` (macOS) or `%USERPROFILE%\.cursor\mcp.json` (Windows) and paste the same JSON as for Claude Desktop, then restart Cursor:
+
+```json
+{
+  "mcpServers": {
+    "ai-checkpoint": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "ai-checkpoint[mcp] @ git+https://github.com/<owner>/ai-checkpoint",
+        "ai-checkpoint-mcp"
+      ]
+    }
+  }
+}
+```
+
+### If the app cannot find `uvx`
+
+Desktop apps often do not see the PATH your terminal has. If the server fails to start with "command not found" or "spawn uvx ENOENT", find the full path and use it as `command`.
+
+- macOS: run `which uvx`. Example result: `/Users/yourname/.local/bin/uvx`, so use `"command": "/Users/yourname/.local/bin/uvx"`.
+- Windows: run `where.exe uvx` in PowerShell or Command Prompt (plain `where` prints nothing in PowerShell). Example result: `C:\Users\yourname\.local\bin\uvx.exe`. In JSON every backslash must be doubled: `"command": "C:\\Users\\yourname\\.local\\bin\\uvx.exe"`.
+
+### 3. The 2-minute test
+
+1. Open a new chat and have a short conversation, for example plan a trip or outline a document.
+2. Say: `checkpoint this chat as tester/trial-1`. The AI should call `save_checkpoint` and confirm.
+3. Open a brand-new chat and say: `resume tester/trial-1`.
+4. Check whether the new chat picks up where the old one left off and confirms the current step with you.
+
+Where checkpoints are stored: `~/.ai-checkpoint` on macOS, `%USERPROFILE%\.ai-checkpoint` on Windows. Set the `AI_CHECKPOINT_HOME` environment variable to use another folder.
+
+### 4. Send feedback
+
+Please open an issue at https://github.com/<owner>/ai-checkpoint/issues (or contact: <contact>). Useful things to include:
+
+- Your OS (macOS or Windows) and the app (Claude Desktop, Claude Code or Cursor)
+- What the resumed chat got right, and what it got wrong or forgot
+- Anything you had to re-explain in the new chat
+- Any error message, copied exactly
+
+Windows support has so far only been checked by tests that simulate Windows on Linux (see "Windows notes" below), so real-Windows reports are especially valuable.
+
 ## Quick start (macOS)
 
 ```

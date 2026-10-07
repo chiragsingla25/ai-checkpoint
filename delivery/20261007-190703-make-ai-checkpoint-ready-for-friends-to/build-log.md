@@ -19,3 +19,14 @@
 - Tests: `python -m pytest -q` -> 133 passed
 - User-visible changes: stdin/--file decoding is back to HEAD behaviour (no longer forced to UTF-8). The msvcrt retry sleep is not visible apart from lower CPU use while waiting for the lock.
 - Notes: Deferred, not done: a `__main__` block in cli.py (QA criterion 13 note), and chaining the last OSError as the cause of the lock timeout. I briefly ran `git stash` by mistake, which reverted the working tree. I restored it with `git stash pop`, and the final full-suite result above was taken before that. I am re-running the suite once more now.
+
+## F-002 attempt 1
+- What changed: src/ai_checkpoint/mcp_launcher.py (new `ai-checkpoint-mcp` entry: prints an `ai-checkpoint[mcp]` install hint to stderr and exits 1 if mcp/pydantic is missing, else runs server.main); pyproject.toml (ai-checkpoint-mcp now points at mcp_launcher:main); README.md (new "## For testers" section before Quick start: uv/git prerequisites, Mac/Windows uv install, Claude Desktop/Claude Code/Cursor configs, full-path-to-uvx note, 2-minute test, storage locations, feedback with `<owner>` and `<contact>` placeholders); tests/test_mcp_launcher.py (missing-extra message, launcher delegates, README JSON/spec check).
+- How to run it: `uvx --from "ai-checkpoint[mcp] @ git+https://github.com/<owner>/ai-checkpoint" ai-checkpoint-mcp`
+- Tests: `python -m pytest -q` (see result in reply). Manual uvx check, run against a temp clone of HEAD with my uncommitted files overlaid and committed in the clone (fresh UV_CACHE_DIR and AI_CHECKPOINT_HOME): tools/list returned exactly the 4 tools in 7 s; save_checkpoint then resume_checkpoint by name worked, cp-001.json exists, 1 commit; `ai-checkpoint --help` without extra rc=0; `ai-checkpoint-mcp` without extra rc=1 with hint, no traceback; `uv build` wheel contains all modules incl. eval/* and entry_points lists the 3 scripts. No non-Python runtime files are read by the package. The driver scripts are in the scratchpad, not the repo. QA must commit before re-running the git+file check on the real repo.
+- User-visible changes: ai-checkpoint-mcp entry point is now ai_checkpoint.mcp_launcher:main (`python -m ai_checkpoint.server` still works); missing-extra now gives a friendly message.
+- Notes: Not committed. Kept the existing Quick start heading unchanged. Windows is still only simulated.
+
+## Orchestrator README tweaks after F-002 QA PASS
+- From QA notes: `where uvx` -> `where.exe uvx` (PowerShell alias issue); added the Settings > Developer > Edit Config route for Claude Desktop. Docs only.
+- Updated tests/test_mcp_launcher.py needle to 'where.exe uvx' to match. Full suite: 136 passed.
