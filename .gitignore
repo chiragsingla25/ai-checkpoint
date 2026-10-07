@@ -9,3 +9,6 @@ venv/
 .eggs/
 .coverage
 htmlcov/
+
+# eval outputs
+results/
