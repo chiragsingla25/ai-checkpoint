@@ -9,7 +9,7 @@ the tool fills the same sections.
 """
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 try:  # mcp >= 2
     from mcp.server.mcpserver import MCPServer as _Server
@@ -44,9 +44,18 @@ SERVER_INSTRUCTIONS = (
 FD = FIELD_DESCRIPTIONS
 
 
+class RejectedIn(BaseModel):
+    option: str = Field(description=FD["decisions.rejected.option"])
+    how_far: Literal["discussed", "prototyped", "built_then_removed"] = Field(
+        description=FD["decisions.rejected.how_far"]
+    )
+    note: Optional[str] = Field(default=None, description=FD["decisions.rejected.note"])
+
+
 class DecisionIn(BaseModel):
     decision: str = Field(description=FD["decisions.decision"])
     reason: str = Field(description=FD["decisions.reason"])
+    rejected: List[RejectedIn] = Field(default_factory=list, description=FD["decisions.rejected"])
 
 
 class VerbatimIn(BaseModel):

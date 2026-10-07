@@ -53,10 +53,22 @@ def id_number(checkpoint_id: str) -> int:
     return int(m.group(1))
 
 
+#: How far a rejected alternative got, from least to most effort spent on it.
+HOW_FAR_VALUES = ("discussed", "prototyped", "built_then_removed")
+
+
+@dataclass
+class Rejected:
+    option: str
+    how_far: str
+    note: str = ""
+
+
 @dataclass
 class Decision:
     decision: str
     reason: str
+    rejected: list = field(default_factory=list)
 
 
 @dataclass
@@ -102,7 +114,7 @@ class Checkpoint:
             "resumed_from": self.resumed_from,
             "objective": self.objective,
             "context": self.context,
-            "decisions": [{"decision": d.decision, "reason": d.reason} for d in self.decisions],
+            "decisions": [_decision_dict(d) for d in self.decisions],
             "completed": list(self.completed),
             "current_step": self.current_step,
             "next_steps": list(self.next_steps),
@@ -142,6 +154,20 @@ class Checkpoint:
             checkpoint_id=_opt_str(g("checkpoint_id"), "checkpoint_id"),
             created_at=_opt_str(g("created_at"), "created_at"),
         )
+
+
+def _decision_dict(d: "Decision") -> dict:
+    out = {"decision": d.decision, "reason": d.reason}
+    if d.rejected:  # omitted when empty so checkpoints without it keep their old shape
+        out["rejected"] = [_rejected_dict(r) for r in d.rejected]
+    return out
+
+
+def _rejected_dict(r: "Rejected") -> dict:
+    out = {"option": r.option, "how_far": r.how_far}
+    if r.note:
+        out["note"] = r.note
+    return out
 
 
 # ------------------------------------------------------------- validators
@@ -223,6 +249,27 @@ def _decisions(v: Any) -> list:
             Decision(
                 decision=_req_str(item.get("decision"), f"decisions[{i}].decision"),
                 reason=_req_str(item.get("reason"), f"decisions[{i}].reason"),
+                rejected=_rejected(item.get("rejected"), f"decisions[{i}].rejected"),
+            )
+        )
+    return out
+
+
+def _rejected(v: Any, name: str) -> list:
+    out = []
+    for i, item in enumerate(_obj_list(v, name)):
+        how_far = item.get("how_far")
+        if how_far is None:
+            raise ValidationError(f"{name}[{i}].how_far", "is required")
+        if how_far not in HOW_FAR_VALUES:  # also rejects non-strings (unhashable-safe: tuple membership)
+            raise ValidationError(
+                f"{name}[{i}].how_far", f"must be one of {', '.join(HOW_FAR_VALUES)}, got {how_far!r}"
+            )
+        out.append(
+            Rejected(
+                option=_req_str(item.get("option"), f"{name}[{i}].option"),
+                how_far=how_far,
+                note=_opt_str(item.get("note"), f"{name}[{i}].note"),
             )
         )
     return out

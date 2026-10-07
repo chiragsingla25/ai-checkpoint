@@ -60,6 +60,23 @@ def _bullets(items) -> str:
     return "\n".join(f"- {x}" for x in items) if items else EMPTY_MARK
 
 
+_HOW_FAR_WORDS = {
+    "discussed": "discussed",
+    "prototyped": "prototyped",
+    "built_then_removed": "built, then removed",
+}
+
+
+def _decision(d) -> str:
+    lines = [f"- {d.decision}", f"  Reason: {d.reason}"]
+    for r in d.rejected:
+        line = f"  Rejected: {_label(r.option)} ({_HOW_FAR_WORDS.get(r.how_far, r.how_far)})"
+        if r.note.strip():
+            line += f" - {_label(r.note)}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def _label(label: str) -> str:
     return " ".join(label.split())
 
@@ -90,7 +107,7 @@ def render_brief(cp: Checkpoint) -> str:
     section("Context", _text(cp.context))
     section(
         "Decisions already made",
-        "\n".join(f"- {d.decision}\n  Reason: {d.reason}" for d in cp.decisions) or EMPTY_MARK,
+        "\n".join(_decision(d) for d in cp.decisions) or EMPTY_MARK,
     )
     section("Completed so far", _bullets(cp.completed))
     section("Current step", _text(cp.current_step))

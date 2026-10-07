@@ -1,0 +1,30 @@
+[
+  {
+    "id": "F-001",
+    "title": "Record how far rejected alternatives got",
+    "acceptance": [
+      "Each decision accepts an optional `rejected` list of objects `{option: string, how_far: one of \"discussed\" | \"prototyped\" | \"built_then_removed\", note: optional string}`; `Checkpoint.from_dict` accepts it and `to_dict` round-trips it unchanged (pytest test)",
+      "A decision with no `rejected` key, `rejected: null` or `rejected: []` loads and round-trips with an empty list (pytest test)",
+      "Invalid input fails with ValidationError naming the exact field: unknown `how_far` value (e.g. \"tried\") -> `decisions[0].rejected[0].how_far`; empty or missing `option` -> `decisions[0].rejected[0].option`; `rejected` not a list -> `decisions[0].rejected` (pytest tests)",
+      "`render_brief` lists each rejected alternative under its decision with its option and how far it got in readable words (e.g. `Rejected: hooks (prototyped)` and `built, then removed`), plus the note when present, so a resumed chat can answer 'was X ever tried?' (pytest asserts the strings appear)",
+      "The save_checkpoint schema/description in schema.py documents the `rejected` field and its allowed `how_far` values (`get` of the registered tool's input schema shows them)",
+      "Secrets inside `option` or `note` (e.g. `sk-ant-...`, `token=abcd1234efgh`) are stored redacted by `Store.save` (pytest test)",
+      "Old-format checkpoints still work: a test fixture shaped like cp-001..cp-003 (decisions with only `decision` and `reason`, no `workspace`) loads via `Store.get`, resumes via the MCP `resume_checkpoint` tool and the CLI, and its rendered brief is byte-identical to a golden file captured from the pre-change code (pytest test)"
+    ]
+  },
+  {
+    "id": "F-002",
+    "title": "Workspace section and 'set up first' checklist on resume",
+    "acceptance": [
+      "Checkpoints accept an optional `workspace` object covering ROADMAP item 8: files/folders (path), repos (path, branch, last_commit), access granted (folders, permissions such as delete/push), connectors/MCP servers, tools and setup (venv/interpreter, CLIs, local servers/ports), env vars by NAME only, skills/plugins/agents, and external references (URL/doc/ticket/artifact); every item carries a status of `still_relevant` or `done_with`. `from_dict`/`to_dict` round-trip a fully populated workspace (pytest test)",
+      "A missing or null `workspace`, or one with only some categories, loads with empty defaults; an item with an unknown status (e.g. \"maybe\") or a missing path/name fails with ValidationError naming the field, e.g. `workspace.repos[0].status` (pytest tests)",
+      "Env vars are names only: an env var entry given as `ANTHROPIC_API_KEY=sk-ant-abc123...` is stored as `ANTHROPIC_API_KEY` with no value anywhere in the saved JSON file (pytest test reads the file on disk)",
+      "Secrets anywhere in workspace strings (tokens in URLs, `Bearer ...`, `password=...`) are redacted in the saved file by `Store.save` (pytest test)",
+      "`render_brief` for a checkpoint with still-relevant workspace items shows a short 'Set up first' checklist (before 'Before you continue') listing only `still_relevant` items (folders to request, connectors to check, repo + branch + last commit, tools/env var names, files to open); `done_with` items do not appear in the checklist (pytest test)",
+      "That brief tells the resumed AI to ask the user before requesting any folder access or connector, not to assume it (pytest asserts the instruction text)",
+      "When there is no workspace, or every item is `done_with`, the brief has no 'Set up first' checklist (pytest test)",
+      "The save_checkpoint description in schema.py asks the saving AI to fill `workspace`, judge each item still relevant or done with, and give env var names never values; the pinned hash and length constants in tests/test_eval.py are updated to the new text with a comment saying why, and both hash tests pass",
+      "The same old-format fixture still renders a byte-identical brief after this feature, and `$HOME/aic-venv/bin/python -m pytest -q` from the repo root reports 0 failures with the 117 previously passing tests still present"
+    ]
+  }
+]

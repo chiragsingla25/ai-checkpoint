@@ -47,9 +47,25 @@ FIELD_DESCRIPTIONS = {
     "current_step": "The exact step the chat was on when saved: what was being done, and how far it got.",
     "next_steps": "Ordered, concrete instructions for continuing from the current step. At least one.",
     "context": "Background facts, constraints, environment and preferences the user stated that the next AI must respect.",
-    "decisions": "Each decision made, with its reason, so settled questions are not reopened.",
+    "decisions": (
+        "Each decision made, with its reason, so settled questions are not reopened. "
+        "For each decision, list in `rejected` the alternatives that were turned down."
+    ),
     "decisions.decision": "What was decided, stated plainly.",
     "decisions.reason": "Why it was decided, including options that were rejected.",
+    "decisions.rejected": (
+        "Optional. Alternatives that were considered and rejected for this decision, each as "
+        "{option, how_far, note?}. `how_far` is how far it got: \"discussed\" (only talked about), "
+        "\"prototyped\" (a trial or spike was made) or \"built_then_removed\" (fully built, then "
+        "taken out). `note` is an optional short remark. This lets the next chat answer "
+        "\"was X ever tried?\"."
+    ),
+    "decisions.rejected.option": "The rejected alternative, named plainly.",
+    "decisions.rejected.how_far": (
+        "One of \"discussed\", \"prototyped\", \"built_then_removed\": how far the rejected "
+        "option got before it was dropped."
+    ),
+    "decisions.rejected.note": "Optional. Why it was dropped or what the trial showed.",
     "completed": "What is already done.",
     "open_questions": "Unresolved questions or items still waiting on the user.",
     "verbatim": "Material that must not be paraphrased: code, numbers, exact wording, file contents. Each with a label.",
@@ -72,7 +88,12 @@ COMPACTION_FIELDS = (
     ("checkpoint_name", "string", True),
     ("objective", "string", True),
     ("context", "string", False),
-    ("decisions", "array of {decision: string, reason: string}", False),
+    (
+        "decisions",
+        "array of {decision: string, reason: string, rejected?: array of "
+        "{option: string, how_far: \"discussed\"|\"prototyped\"|\"built_then_removed\", note?: string}}",
+        False,
+    ),
     ("completed", "array of strings", False),
     ("current_step", "string", True),
     ("next_steps", "array of strings (at least one)", True),

@@ -1,0 +1,21 @@
+{
+  "checkpoint_id": "cp-003",
+  "chat_name": "legacy-chat",
+  "checkpoint_name": "old-format",
+  "created_at": "2026-01-02T03:04:05+00:00",
+  "client": "claude-code",
+  "resumed_from": "cp-002",
+  "objective": "Finish the demand forecast",
+  "context": "Weekly data, 3 years",
+  "decisions": [
+    {"decision": "Use Prophet", "reason": "handles seasonality; ARIMA was rejected as too slow"},
+    {"decision": "Skip hourly data", "reason": "not needed for weekly forecast"}
+  ],
+  "completed": ["Loaded data", "Cleaned outliers"],
+  "current_step": "Tuning changepoints",
+  "next_steps": ["Run backtest", "Write report"],
+  "open_questions": ["Which holidays?"],
+  "verbatim": [{"label": "model", "content": "m = Prophet(changepoint_prior_scale=0.05)\n"}],
+  "last_exchange": {"user": "go on", "assistant": "ok"},
+  "notes_for_next_ai": "User prefers terse answers"
+}
