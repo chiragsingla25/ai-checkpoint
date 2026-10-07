@@ -28,10 +28,17 @@ from .store import GitStore
 SERVER_NAME = "ai-checkpoint"
 
 SERVER_INSTRUCTIONS = (
-    "AI Checkpoint saves named restore points of this chat and resumes them in a new chat. "
-    "When the user asks to checkpoint, save or hand over this chat, call save_checkpoint. "
-    "When the user asks to resume or continue from a checkpoint, call resume_checkpoint and "
-    "follow the brief it returns."
+    "AI Checkpoint saves named restore points of a chat and resumes them in a new chat.\n"
+    "- If the user asks to checkpoint, save or hand over this chat, call save_checkpoint.\n"
+    "- If the user asks to resume or continue a checkpoint, including a bare ref like "
+    "'resume trial/test-v1', call resume_checkpoint with that ref. Do not search files, git "
+    "or the web for it.\n"
+    "- Names: chat_name is a short name for the chat or project, with no '/'. checkpoint_name is "
+    "a short descriptive name such as 'forecasting-v2'. If the user gives 'chat/checkpoint', "
+    "split it into those two parts.\n"
+    "- On resume, read the returned brief and confirm the current step with the user before "
+    "continuing.\n"
+    "- If the ref is unknown or ambiguous, call list_checkpoints."
 )
 
 FD = FIELD_DESCRIPTIONS

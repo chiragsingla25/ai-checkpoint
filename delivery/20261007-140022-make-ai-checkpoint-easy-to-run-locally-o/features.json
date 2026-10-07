@@ -1,0 +1,32 @@
+[
+  {
+    "id": "F-001",
+    "title": "MCP server instructions that route checkpoint/resume requests to the tools",
+    "acceptance": [
+      "Over a stdio MCP session (`python -m ai_checkpoint.server`, as in tests/test_server.py), the `instructions` field of the `initialize` result is a non-empty string that names `save_checkpoint` and `resume_checkpoint`",
+      "The instructions say that requests to checkpoint/save this chat must call save_checkpoint, and that requests to resume/continue a checkpoint (including a bare `chat/checkpoint` ref such as 'resume trial/test-v1') must call resume_checkpoint rather than searching files, git or the web",
+      "The instructions tell the client how to pick names: chat_name is a short name for the chat/project with no '/', checkpoint_name is a short descriptive name (e.g. 'forecasting-v2'), and a user-given 'chat/checkpoint' ref is split into those two parts",
+      "The instructions tell the client, on resume, to read the returned brief and confirm the current step with the user before continuing; and mention list_checkpoints for when the ref is unknown or ambiguous",
+      "The save_checkpoint tool description is byte-identical to before the change (`ai_checkpoint.schema.SAVE_DESCRIPTION` unchanged, and the description returned by `list_tools` equals it)",
+      "The full existing test suite (`pytest`, 110 tests) passes, plus a new test asserting the instructions content via `initialize`"
+    ]
+  },
+  {
+    "id": "F-002",
+    "title": "One-command local setup script (scripts/setup-mac.sh) and README quick start",
+    "acceptance": [
+      "`scripts/setup-mac.sh` exists, is executable, passes `bash -n`, and `--help` prints usage listing `--dry-run` and `--desktop-config PATH`",
+      "Run from a copy of the repo with a temp HOME, a stub `claude` on PATH that logs its arguments, and `--desktop-config <tmp>/claude_desktop_config.json`: it exits 0, creates `<repo>/.venv`, and `<repo>/.venv/bin/ai-checkpoint-mcp` exists and `<repo>/.venv/bin/python -c 'import mcp, ai_checkpoint'` succeeds",
+      "The stub log shows `claude mcp remove ai-checkpoint -s local` (failure tolerated) and a `claude mcp add` at user scope (`-s user`/`--scope user`) for name `ai-checkpoint` with `AI_CHECKPOINT_HOME=$HOME/.ai-checkpoint` (absolute, under the temp HOME) and a command that is an absolute path equal to `<repo>/.venv/bin/ai-checkpoint-mcp`; any earlier user-scope entry is removed first so re-runs do not fail",
+      "With no Desktop config file present, the script creates it containing `mcpServers.ai-checkpoint` with `command` = the absolute venv `ai-checkpoint-mcp` path and `env.AI_CHECKPOINT_HOME` = `$HOME/.ai-checkpoint`; the resulting file is valid JSON",
+      "With an existing Desktop config holding other servers and other top-level keys (and an older `ai-checkpoint` entry), the script writes a backup copy of the original next to it first, keeps every other server and key unchanged, and replaces only the `ai-checkpoint` entry",
+      "Running the script twice in a row exits 0 both times and leaves the Desktop config with exactly one `ai-checkpoint` entry and identical content after the second run (idempotent; venv reused/updated, not an error)",
+      "`--dry-run` exits 0, prints what it would do, and creates no `.venv`, writes no Desktop config or backup, and invokes the stub `claude` with no mutating commands",
+      "If `claude` is not on PATH, the script prints a message that Claude Code registration was skipped and still completes the venv and Desktop config steps with exit 0",
+      "If the selected Python is older than 3.10 (e.g. a stub `python3` on PATH, or `PYTHON=<stub>`, reporting 3.9), the script exits non-zero with a clear message naming the 3.10 requirement and creates nothing",
+      "A malformed existing Desktop config (invalid JSON) makes the script exit non-zero with a clear message and leaves the file untouched",
+      "At the end the script prints next steps: restart Claude Desktop, run `/mcp` in Claude Code to verify, and a first save/resume test (e.g. 'checkpoint this chat as trial/test-v1' then 'resume trial/test-v1' in a new chat)",
+      "README has a quick start section near the top showing `./scripts/setup-mac.sh` (with `--dry-run` mentioned) for macOS, and the existing manual install/MCP instructions remain"
+    ]
+  }
+]

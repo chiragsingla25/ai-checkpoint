@@ -109,3 +109,23 @@ def test_in_process_errors_and_recovery(root, valid):
     again = _call(server, "save_checkpoint", {**valid, "checkpoint_name": "v2", "resumed_from": "cp-001"})
     assert not isinstance(again, Exception)
     assert GitStore(root).get("v2").resumed_from == "cp-001"
+
+
+def test_initialize_instructions_route_to_tools(tmp_path):
+    async def go():
+        async with stdio_client(_params(tmp_path / "h")) as (r, w):
+            async with ClientSession(r, w) as s:
+                init = await s.initialize()
+                tools = await s.list_tools()
+                return init, tools
+
+    init, tools = asyncio.run(asyncio.wait_for(go(), 60))
+    text = init.instructions
+    assert isinstance(text, str) and text.strip()
+    for needle in ("save_checkpoint", "resume_checkpoint", "list_checkpoints", "trial/test-v1",
+                   "chat_name", "checkpoint_name", "forecasting-v2", "no '/'", "split",
+                   "confirm the current step", "brief", "Do not search"):
+        assert needle in text, needle
+    from ai_checkpoint.schema import SAVE_DESCRIPTION
+    save = next(t for t in tools.tools if t.name == "save_checkpoint")
+    assert save.description == SAVE_DESCRIPTION
