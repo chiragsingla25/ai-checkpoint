@@ -7,6 +7,21 @@ See `docs/IDEA.md` for the idea.
 Checkpoints are JSON files in a local git repo (one commit per save). Store
 location: `~/.ai-checkpoint`, or `$AI_CHECKPOINT_HOME`.
 
+## Quick start (macOS)
+
+```
+./scripts/setup-mac.sh --dry-run    # preview what it will do, changes nothing
+./scripts/setup-mac.sh
+```
+
+Needs Python 3.10+ (`python3` on PATH, or `PYTHON=/path/to/python3`). The script
+creates `.venv` in this repo, installs `.[mcp]`, registers `ai-checkpoint` with
+Claude Code at user scope (if the `claude` CLI is installed) and adds it to the
+Claude Desktop config (the old file is backed up next to it first). Safe to
+re-run. Use `--desktop-config PATH` to edit a different config file. Then restart
+Claude Desktop, run `/mcp` in Claude Code, and try "checkpoint this chat as
+trial/test-v1" followed by "resume trial/test-v1" in a new chat.
+
 ## Install
 
 ```
