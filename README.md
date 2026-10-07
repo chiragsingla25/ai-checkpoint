@@ -64,6 +64,10 @@ claude mcp add ai-checkpoint --env AI_CHECKPOINT_HOME=$HOME/.ai-checkpoint -- ai
 Then say "checkpoint this chat as forecasting-v2" in one chat, and
 "resume forecasting-v2" in a new one.
 
+## Windows notes
+
+The store locks with `fcntl.flock` on macOS/Linux and `msvcrt.locking` on Windows, writes checkpoints as UTF-8 with `\n` line endings, ignores the user's `core.autocrlf` setting, and forces UTF-8 on CLI output. These behaviours are checked by `tests/test_windows_sim.py`, which only *simulates* Windows on Linux (hidden `fcntl`, fake `msvcrt`, CRLF files, autocrlf git config, cp1252 console). Real-Windows verification is done by the testers.
+
 ## CLI
 
 ```

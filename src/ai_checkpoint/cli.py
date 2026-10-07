@@ -61,7 +61,25 @@ def _run(args) -> int:
     return 0
 
 
+def _force_utf8() -> None:
+    """Emit UTF-8 whatever the console code page is (e.g. cp1252 on Windows).
+
+    Output only: stdin is deliberately left alone so input decoding is unchanged.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            if (getattr(stream, "encoding", None) or "").lower().replace("_", "-") in ("utf-8", "utf8"):
+                continue  # already UTF-8: leave the stream (and its error handler) untouched
+            try:
+                # keep each stream's existing error handler (e.g. stderr's backslashreplace)
+                reconfigure(encoding="utf-8", errors=stream.errors)
+            except (OSError, ValueError):
+                pass
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    _force_utf8()
     args = _parser().parse_args(argv)
     try:
         return _run(args)

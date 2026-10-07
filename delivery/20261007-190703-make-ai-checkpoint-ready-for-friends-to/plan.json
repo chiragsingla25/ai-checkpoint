@@ -1,0 +1,19 @@
+{
+  "order": [
+    "intake",
+    "build",
+    "qa"
+  ],
+  "skipped": [],
+  "per_feature": [
+    "build",
+    "qa"
+  ],
+  "agents": {
+    "intake": "consultancy:intake",
+    "build": "consultancy:builder",
+    "qa": "consultancy:qa"
+  },
+  "reason": "Cross-platform and packaging changes to existing code; QA verifies install path and regressions independently.",
+  "created": "2026-10-07T19:09:07"
+}

@@ -1,0 +1,40 @@
+[
+  {
+    "id": "F-001",
+    "title": "Windows support for the store, CLI and MCP server",
+    "acceptance": [
+      "`python -m pytest -q` from the project root passes with all 117 pre-existing tests still passing, plus the new Windows-simulation tests listed below.",
+      "`git diff <base> -- src/ai_checkpoint/schema.py` shows SAVE_DESCRIPTION unchanged, and tests/test_server.py still asserts the registered save_checkpoint description equals SAVE_DESCRIPTION byte for byte.",
+      "GitStore._lock (src/ai_checkpoint/store.py) uses fcntl.flock when fcntl is importable and msvcrt.locking when it is not; it is a no-op only when neither module exists. Inspecting the code shows the msvcrt path locks a fixed byte range from offset 0 (seek(0) before locking, not the append position), retries or blocks until acquired, and unlocks the same range in a finally block.",
+      "A test that hides fcntl (e.g. monkeypatching sys.modules['fcntl'] = None) and injects a fake msvcrt module records that save() calls msvcrt.locking with LK_LOCK (or LK_NBLCK in a retry loop) and then LK_UNLCK on the same file and byte range, and that the checkpoint is still written and committed.",
+      "Failure case: with the fake msvcrt making the save raise inside the lock (e.g. git commit fails), a test shows LK_UNLCK is still called and no checkpoint file is left behind.",
+      "A test with both fcntl and msvcrt hidden shows save/list/get/resume still work (no-op lock fallback preserved).",
+      "On Linux, a test (or the existing concurrency test) shows concurrent saves through the fcntl path still produce distinct sequential ids, i.e. Mac/Linux behaviour is unchanged.",
+      "Checkpoint JSON is written with encoding='utf-8' and newline='\\n' and read with encoding='utf-8'; a test saves a checkpoint containing non-ASCII text (e.g. 'café ✓ 日本') and CRLF-free content, then asserts the file bytes contain no b'\\r\\n' and get/resume round-trip the text exactly.",
+      "Failure/edge case: a test writes a checkpoint file whose bytes use CRLF line endings (as git autocrlf=true could produce on a Windows checkout) and shows list/get/resume still load it correctly.",
+      "Every git subprocess call in store.py passes encoding='utf-8' (and errors handling that cannot crash on non-UTF-8 output), and the store's git commands do not depend on the user's core.autocrlf setting: a test running saves with GIT_CONFIG_GLOBAL pointing at a config that sets core.autocrlf=true and core.safecrlf=true still saves, commits and lists successfully.",
+      "Paths are built with pathlib, never by string-joining with '/': a test shows default_root() returns Path.home()/'.ai-checkpoint' when AI_CHECKPOINT_HOME is unset or empty and Path(AI_CHECKPOINT_HOME) when set; code inspection of store.py, server.py and cli.py shows no hard-coded POSIX separators in filesystem paths (the '/' in git pathspecs and chat/checkpoint refs is allowed).",
+      "Ref parsing is platform-independent: a test shows a ref containing a backslash (e.g. 'chat\\\\name') is treated as a plain name (NotFoundError if absent), not split as a path, and 'chat/name' refs still resolve as before.",
+      "The CLI writes UTF-8 regardless of the console code page: running `PYTHONIOENCODING=cp1252 python -m ai_checkpoint.cli get <ref>` (and `resume <ref>`) on a checkpoint containing non-cp1252 characters exits 0 and does not raise UnicodeEncodeError.",
+      "When git is not on PATH, save raises StoreError with a message naming git (existing behaviour) and the MCP save_checkpoint tool returns that message as a tool error rather than crashing the server; a test covers this by running with PATH set to an empty directory.",
+      "intake/QA notes and the README state that these checks simulate Windows on Linux and that real-Windows verification is done by the testers."
+    ]
+  },
+  {
+    "id": "F-002",
+    "title": "Install from a git URL with uvx, plus README 'For testers' section",
+    "acceptance": [
+      "From a fresh `git clone` of the committed project into a temp directory, with a fresh empty temp AI_CHECKPOINT_HOME and UV_CACHE_DIR, running `uvx --from \"ai-checkpoint[mcp] @ git+file://<clone path>\" ai-checkpoint-mcp` starts the server; a script sends MCP `initialize`, `notifications/initialized` and `tools/list` over stdio and receives a tools/list result naming exactly save_checkpoint, list_checkpoints, get_checkpoint and resume_checkpoint, within 120 seconds.",
+      "Using the same uvx-launched server, a `tools/call` of save_checkpoint with a minimal valid checkpoint succeeds and a subsequent resume_checkpoint by name returns the brief; afterwards `<AI_CHECKPOINT_HOME>/checkpoints/cp-001.json` exists and `git -C <AI_CHECKPOINT_HOME> log --oneline` shows one commit.",
+      "`uvx --from \"ai-checkpoint @ git+file://<clone path>\" ai-checkpoint --help` (without the mcp extra) exits 0, showing the CLI installs without third-party dependencies.",
+      "Failure case: `uvx --from \"ai-checkpoint @ git+file://<clone path>\" ai-checkpoint-mcp` (mcp extra omitted) exits non-zero with a message on stderr telling the user to install the `mcp` extra (e.g. 'ai-checkpoint[mcp]'), not a raw ImportError traceback.",
+      "A wheel built with `uv build` (or `python -m build`) from the clone contains every module under src/ai_checkpoint (including ai_checkpoint/eval/*) and any non-Python files the package reads at runtime; `unzip -l` on the wheel confirms it, and its entry_points.txt lists ai-checkpoint, ai-checkpoint-mcp and checkpoint-eval.",
+      "README.md has a '## For testers' section (placed before the developer install sections) that contains: prerequisites (uv and git) with links; uv install commands for macOS (`curl -LsSf https://astral.sh/uv/install.sh | sh`) and Windows PowerShell (`powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\"`); and the repo URL placeholder https://github.com/<owner>/ai-checkpoint.",
+      "The 'For testers' section has ready-to-paste config using command `uvx` and args `[\"--from\", \"ai-checkpoint[mcp] @ git+https://github.com/<owner>/ai-checkpoint\", \"ai-checkpoint-mcp\"]` for: Claude Desktop with both config file locations (`~/Library/Application Support/Claude/claude_desktop_config.json` and `%APPDATA%\\Claude\\claude_desktop_config.json`); Claude Code (`claude mcp add -s user ai-checkpoint -- uvx --from ... ai-checkpoint-mcp`); and Cursor (`~/.cursor/mcp.json` and `%USERPROFILE%\\.cursor\\mcp.json`). Every JSON block in the section parses with `json.loads` after the placeholder is left as-is.",
+      "The JSON config's args, with the placeholder URL swapped for the local git+file URL, is exactly what the uvx launch check above ran (same `--from` spec shape and script name), so the documented command is the tested one.",
+      "The section includes a note on using the full path to uvx if the app cannot find it, with how to find it on each OS (`which uvx` on macOS, `where uvx` on Windows) and an example path for each.",
+      "The section includes a 2-minute test (save a checkpoint in one chat, then resume it by name in a new chat), states where checkpoints are stored (`~/.ai-checkpoint` on macOS, `%USERPROFILE%\\.ai-checkpoint` on Windows, overridable with AI_CHECKPOINT_HOME), and says how to send feedback (e.g. GitHub issues at the placeholder repo URL, with what to include).",
+      "The section contains no Linux-specific instructions, no HTTP transport, hosting or PyPI instructions, and the existing README sections (Quick start, Install, MCP server, CLI, resume brief, evaluation kit) remain present."
+    ]
+  }
+]

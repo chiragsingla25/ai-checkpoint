@@ -18,6 +18,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +35,11 @@ _FILE_RE = re.compile(r"^cp-(\d+)\.json$")
 _NUMBERED_RE = re.compile(r"^(.*\S)\s+\((\d+)\)$")
 _GIT_IDENTITY = ("-c", "user.name=AI Checkpoint", "-c", "user.email=ai-checkpoint@localhost",
                  "-c", "commit.gpgsign=false")
+# Never depend on the user's line-ending config (Windows installs default to autocrlf=true).
+_GIT_CRLF = ("-c", "core.autocrlf=false", "-c", "core.safecrlf=false")
+_LOCK_BYTES = 1  # fixed byte range locked at offset 0 on Windows
+_LOCK_TIMEOUT_S = 60.0
+_LOCK_RETRY_SLEEP_S = 0.05  # pause between msvcrt lock retries (avoid busy-wait)
 
 
 def default_root() -> Path:
@@ -139,8 +145,8 @@ class GitStore:
                if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")}
         try:
             proc = subprocess.run(
-                ["git", "-C", str(self.root), *args],
-                capture_output=True, text=True, encoding="utf-8", env=env,
+                ["git", *_GIT_CRLF, "-C", str(self.root), *args],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
             )
         except FileNotFoundError as e:
             raise StoreError("the 'git' executable was not found on PATH") from e
@@ -152,22 +158,54 @@ class GitStore:
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         if not (self.root / ".git").exists():
             self._git("init", "-q")
+            self._git("config", "--local", "core.autocrlf", "false", check=False)
             self._git("symbolic-ref", "HEAD", "refs/heads/main", check=False)
 
     @contextlib.contextmanager
     def _lock(self) -> Iterator[None]:
-        """Serialise concurrent saves (best effort; no-op where fcntl is unavailable)."""
+        """Serialise concurrent saves (best effort).
+
+        Uses ``fcntl.flock`` where available, ``msvcrt.locking`` on Windows, and
+        is a no-op only when neither module exists.
+        """
         try:
             import fcntl
-        except ImportError:  # pragma: no cover (Windows)
+        except ImportError:
+            fcntl = None  # type: ignore[assignment]
+        msvcrt = None
+        if fcntl is None:
+            try:
+                import msvcrt  # type: ignore[no-redef]
+            except ImportError:
+                msvcrt = None
+        if fcntl is None and msvcrt is None:
             yield
             return
         with open(self.root / ".git" / "ai-checkpoint.lock", "a") as fh:
-            fcntl.flock(fh, fcntl.LOCK_EX)
+            if fcntl is not None:
+                fcntl.flock(fh, fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(fh, fcntl.LOCK_UN)
+                return
+            # Windows: lock a fixed byte range at offset 0 (not the append position).
+            deadline = time.monotonic() + _LOCK_TIMEOUT_S
+            while True:
+                fh.seek(0)
+                try:
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, _LOCK_BYTES)
+                    break
+                except OSError:  # LK_LOCK gives up after ~10 s; keep waiting
+                    if time.monotonic() >= deadline:
+                        raise StoreError("timed out waiting for the checkpoint store lock") from None
+                    time.sleep(_LOCK_RETRY_SLEEP_S)
             try:
                 yield
             finally:
-                fcntl.flock(fh, fcntl.LOCK_UN)
+                fh.seek(0)
+                with contextlib.suppress(OSError):
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, _LOCK_BYTES)
 
     # ------------------------------------------------------------- ids
     def _committed_numbers(self) -> List[int]:
