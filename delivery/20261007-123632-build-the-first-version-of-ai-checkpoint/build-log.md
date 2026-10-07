@@ -19,3 +19,29 @@
   - Ref resolution: id (`cp-7` is normalised to `cp-007`), then `chat/name`, then bare name (newest wins across chats), with a case-insensitive fallback if nothing matches exactly. Ordering is by id (not timestamp).
   - Corrupt/unreadable checkpoint files are skipped when listing/resolving rather than failing.
   - Deferred: delete/update (out of scope), real brief wording (F-002).
+
+## F-002 attempt 1
+- What changed:
+  - `src/ai_checkpoint/brief.py`: real `render_brief` (deterministic, fixed section order `BRIEF_ORDER`, `EMPTY_MARK` for empty sections, verbatim/last exchange in fences longer than any backtick run, closing "confirm the current step" instruction); `fence_for`/`fenced` helpers.
+  - `src/ai_checkpoint/server.py`: stdio MCP server (`create_server(store=None)`, `main`), tools save/list/get/resume + prompt `resume`; `save_checkpoint` description and per-field descriptions are the compaction instructions. Core errors become `ToolError` (isError over the wire).
+  - `src/ai_checkpoint/cli.py`, `__main__.py`: `save --file`, `list [--chat]`, `get`, `resume`.
+  - `pyproject.toml`: `[project.scripts]` `ai-checkpoint`, `ai-checkpoint-mcp`. `README.md`: install, mcpServers config, CLI, brief format.
+  - `tests/test_server.py` (stdio subprocess session, schema, in-process errors), `tests/test_brief_cli.py` (brief, byte-exact fences, CLI).
+- How to run it: `pip install -e .[mcp]`; `ai-checkpoint-mcp` or `python -m ai_checkpoint.server`; `ai-checkpoint list|get|resume|save`.
+- Tests: `python3 -m pytest -q` -> 51 passed (~4s).
+- User-visible changes: listing `brief_tokens` now reflects the real brief (larger than the F-001 placeholder). `get_checkpoint` adds `brief_chars` and `brief_tokens` to the checkpoint dict. CLI `get` prints JSON; `list` prints a grouped text table.
+- Notes: installed `mcp` is 2.2.0 (FastMCP renamed `MCPServer`); server imports `mcp.server.mcpserver` and falls back to `mcp.server.fastmcp` for 1.x (1.x path untested). In-process test expects `ToolError` from `server.call_tool` (v2 behaviour); over stdio it is `isError`. Redaction still applies on save. Client label in the header is the stored `client` ("unknown" if unset).
+
+## F-002 attempt 2
+- What changed: `src/ai_checkpoint/cli.py` rejects non-object JSON (str, null, number, list, `[]`) with `error: <file|stdin> must contain a JSON object (got <type>)`, reports too-deeply-nested JSON cleanly, and has a last-resort handler for ValueError/TypeError/KeyError/RecursionError that prints `error:` instead of a traceback. `src/ai_checkpoint/store.py` `GitStore.save` raises ValidationError("checkpoint: must be an object (got X)") for non-mapping input instead of crashing in `dict(data)`. `tests/test_brief_cli.py`: new tests for non-object JSON (7 cases), deeply nested JSON, empty stdin, and store rejection of non-mappings.
+- How to run it: `echo '[1]' | ai-checkpoint save --file -`
+- Tests: `python3 -m pytest -q` gave 65 passed.
+- User-visible changes: new error messages for non-object input; `save()` of a non-mapping now raises ValidationError, not TypeError/ValueError.
+- Notes: Not done (outside the QA finding, noted only): resume prompt with unknown ref returns a generic SDK error; in-process tests assert ToolError rather than isError; `AI_CHECKPOINT_HOME` unusable path reports "no checkpoints"; `mcp>=1.2` fallback untested.
+
+## F-002 attempt 3
+- What changed: src/ai_checkpoint/store.py (GitStore.save normalises non-Checkpoint input via dict(); only TypeError/ValueError from that become ValidationError "checkpoint: must be an object"); tests/test_brief_cli.py (non-mapping test now uses b"ab" instead of []; new tests for list-of-pairs, duck-typed mapping, iterator, and [] giving "chat_name: is required"). CLI non-object JSON handling unchanged (still clean error, no traceback; covered by test_cli_save_non_object_json).
+- How to run it: unchanged
+- Tests: python3 -m pytest -q (full suite) - see result below
+- User-visible changes: GitStore.save([]) reports "chat_name: is required" again (F-001 behaviour); otherwise none.
+- Notes: none

@@ -183,7 +183,14 @@ class GitStore:
         Raises ValidationError (nothing written) for bad input or an unknown
         ``resumed_from``; StoreError if git fails (the new file is removed).
         """
-        raw = data.to_dict() if isinstance(data, Checkpoint) else dict(data)
+        if isinstance(data, Checkpoint):
+            raw = data.to_dict()
+        else:
+            try:
+                raw = dict(data)
+            except (TypeError, ValueError):
+                raise ValidationError(
+                    "checkpoint", f"must be an object (got {type(data).__name__})") from None
         resumed_raw = raw.get("resumed_from")
         # Redact first so secrets can never reach disk, the commit message or validation errors.
         clean = {k: (v if k == "resumed_from" else redact_obj(v)) for k, v in raw.items()}
