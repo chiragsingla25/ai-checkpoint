@@ -54,3 +54,18 @@ Takeaways for scope:
 | Gemini / Claude imports (Mar 2026) | Gemini imports ChatGPT/Claude export ZIPs and memories; Claude imports memory via prompt | Platforms are adding one-way switching themselves. |
 
 Implication: the MCP save/resume pattern with structured state exists already. Gaps nobody covers together: raw transcript + structured state in one checkpoint, git history with diff/branch, remote server for web chats, and published evidence that resume beats a summary.
+
+## Consumer "continue in a new chat" tools (third pass, 2026-10-07)
+
+| Tool | Type | How | Saves named/versioned points? |
+|---|---|---|---|
+| Thredly | Chrome ext + web app (paid after 1 free) | Structured handover: goal, decisions, outputs, next steps | No |
+| MemoryPlugin "Continue Chat" | Free extension, 21+ AI apps | Export chat → summary with "How to Continue" | No (one-shot) |
+| Continue AI | Free extension, ~600 users | Compresses chat keeping code/error logs, moves between ChatGPT/Claude/Gemini | No |
+| ThreadPort | Extension | Pastes full transcript into the other AI | No |
+| ContextSwitchAI, AI Chat Transfer | Extensions | Export + continue | No |
+| /handoff skill, mattpocock claude-handoff | Claude skills | Writes a briefing file to paste into a new chat | File only |
+| ChatGPT "Branch in new chat" | Built-in | Forks from any message, copies full history (stays heavy) | Branch, not light |
+| Claude auto-compaction | Built-in | Compacts in place when the chat is long | No control, same chat |
+
+Gap: named restore points per chat with history/branching, invoked from inside the chat via MCP, shared across clients, with measured handover quality.
