@@ -41,3 +41,16 @@ Takeaways for scope:
 1. Capture + transcript storage is a solved, crowded problem. The differentiator has to be the **checkpoint** itself: named, versioned, diffable, with a structured state section, and a resume context that measurably beats a summary.
 2. Nobody publishes an eval of resume quality. The MVP doc's Test 4 (checkpoint vs summary) is the most defensible asset.
 3. Coding-agent tools ignore web chats (ChatGPT/Claude.ai exports). Importers for the official export files are a cheap path to "any provider".
+
+## MCP-based handoff tools (second pass, 2026-10-07)
+
+| Tool | What it is | Overlap |
+|---|---|---|
+| Session Handoff MCP (Dev-Russo, TypeScript) | `memory_checkpoint` / `memory_resume`; structured snapshots (objective, done, decisions, pending) in `projects/<id>/checkpoints/`; optional git sync; Claude Code + Codex | Closest match to the MVP. Early stage (validation phase). Model-written state only, no raw transcript. |
+| conversation-handoff-mcp (trust-delta) | `handoff_save/load/list/merge`; shared local HTTP server across Claude Desktop, Claude Code, Codex, Gemini CLI | In-memory clipboard; nothing persisted or versioned. |
+| Memo MCP | `memo set` saves goals/tasks/decisions/files to Upstash Redis; restore by ID in another agent | Cloud, 24h TTL by default, no history. |
+| OpenMemory MCP (Mem0) | Local shared memory layer across MCP clients | Long-term facts, not work checkpoints. |
+| Letta Agent File (.af) | Open format for a whole agent: model config, message history, system prompt, memory blocks, tools | "Portable agent" definition; Letta-centric in practice. |
+| Gemini / Claude imports (Mar 2026) | Gemini imports ChatGPT/Claude export ZIPs and memories; Claude imports memory via prompt | Platforms are adding one-way switching themselves. |
+
+Implication: the MCP save/resume pattern with structured state exists already. Gaps nobody covers together: raw transcript + structured state in one checkpoint, git history with diff/branch, remote server for web chats, and published evidence that resume beats a summary.

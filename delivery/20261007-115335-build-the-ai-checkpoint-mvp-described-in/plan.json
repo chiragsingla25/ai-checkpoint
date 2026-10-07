@@ -1,0 +1,19 @@
+{
+  "order": [
+    "intake",
+    "build",
+    "qa"
+  ],
+  "skipped": [],
+  "per_feature": [
+    "build",
+    "qa"
+  ],
+  "agents": {
+    "intake": "consultancy:intake",
+    "build": "consultancy:builder",
+    "qa": "consultancy:qa"
+  },
+  "reason": "New multi-module tool with exact-recovery and git-integrity criteria; QA independently checks each feature.",
+  "created": "2026-10-07T11:55:04"
+}

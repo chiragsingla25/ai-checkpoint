@@ -1,0 +1,85 @@
+[
+  {
+    "id": "F-001",
+    "title": "Package, universal conversation model and local store (`checkpoint init`)",
+    "acceptance": [
+      "`pip install -e .` in the project succeeds with only the standard library as a runtime dependency (`mcp` appears only under an optional extra, e.g. `[project.optional-dependencies] mcp`), and afterwards both `checkpoint --help` and `python -m ai_checkpoint --help` exit 0 and list the subcommands init, capture, save, list, show, resume",
+      "`python -c \"import ai_checkpoint\"` and importing the engine/capture/resume modules succeeds in an environment where `mcp` is NOT installed",
+      "Conversation and Message model objects round-trip: building a Conversation (conversation_id, provider, created_at, messages[id, role, content, timestamp]) and serialising to JSON then loading it back yields an equal object; the JSON keys match MVP section 9 (`conversation_id`, `provider`, `created_at`, `messages` with `id`, `role`, `content`, `timestamp`)",
+      "In an empty temp directory, `checkpoint init` exits 0 and creates `.ai-checkpoint/` containing `config.json`, `conversations/`, `checkpoints/`, `state/`, a `.gitignore`, and a git repository (`git -C .ai-checkpoint rev-parse --git-dir` succeeds) with at least one initial commit",
+      "The `.gitignore` written by init excludes credential-like files (at minimum `*.env`/`.env*`, `*.key`, `*.pem`, `secrets*`), and `config.json` contains no API keys or tokens",
+      "Running `checkpoint init` a second time in the same directory exits 0, prints that it is already initialised, and does not delete or alter existing conversations/checkpoints or git history (commit count unchanged)",
+      "Running `checkpoint list` (or save/capture) in a directory with no `.ai-checkpoint/` exits non-zero with a message telling the user to run `checkpoint init`, without a Python traceback",
+      "The store location defaults to `./.ai-checkpoint` and can be overridden with a global `--root DIR` option (or `AI_CHECKPOINT_ROOT` env var); `checkpoint --root /tmp/x init` creates `/tmp/x/.ai-checkpoint`",
+      "A test suite exists under `tests/` and `python -m pytest -q` passes offline"
+    ]
+  },
+  {
+    "id": "F-002",
+    "title": "Capture a Claude Code JSONL transcript into the working buffer (`checkpoint capture --transcript`)",
+    "acceptance": [
+      "Realistic fixture transcripts exist under `tests/fixtures/` following docs/research.md: user/assistant lines with `uuid`, `parentUuid`, `sessionId`, `timestamp`, `cwd`, `message`; string and block-list content; `tool_use`, `tool_result` and `thinking` blocks; an assistant turn split across several lines sharing one `message.id`; and unknown line types (`summary`, `system`, `file-history-snapshot`)",
+      "`checkpoint capture --transcript tests/fixtures/<file>.jsonl` exits 0, writes `.ai-checkpoint/conversations/<sessionId>.json` in the universal format with `provider` = `claude_code` and `conversation_id` = the transcript's `sessionId`, updates `state/current.json` to point at that conversation, and prints how many messages were captured/added",
+      "Test 1 (MVP section 17): for a fixture with exactly 50 human/assistant messages (25 user prompts, 25 assistant replies, some assistant replies split across multiple lines and some interleaved with tool_use/tool_result), the captured conversation contains every user and assistant message exactly once, in transcript order, with text content identical to the source, each message's `timestamp` equal to the source line's timestamp, and the correct session ID: 100% recovery, 0 duplicates, 0 missing",
+      "Assistant lines sharing a `message.id` are merged into ONE assistant message whose text is the in-order concatenation of their text blocks; `thinking` blocks are not included in content",
+      "A `user` line whose content is only `tool_result` blocks is NOT recorded as a human `user` message (it is either stored with role `tool` or attached to the preceding assistant tool call); `tool_use` blocks are preserved in structured form (tool name and input) on the assistant message and not dropped silently",
+      "Lines of unknown `type`, blank lines and a truncated/invalid final JSON line are skipped without failing; capture exits 0 and the valid messages are stored",
+      "Capturing the same transcript twice is idempotent: the second run reports 0 new messages and the conversation file's message list is unchanged (dedup by source uuid / message.id)",
+      "Restart/recovery: capturing the first N lines, then capturing the full (appended) transcript, yields exactly the same conversation as capturing the full transcript once",
+      "Secrets are redacted before anything is written: a fixture message containing an Anthropic key (`sk-ant-...`), an OpenAI-style key (`sk-...`), a GitHub token (`ghp_...`), an AWS access key id (`AKIA...`) and an `Authorization: Bearer <token>` header is stored with each secret replaced by a `[REDACTED...]` marker; `grep -r` for the original secret strings under `.ai-checkpoint/` finds nothing; ordinary text in the same message is unchanged",
+      "`checkpoint capture --transcript does-not-exist.jsonl` exits non-zero with a clear error and no traceback, and leaves the store unchanged"
+    ]
+  },
+  {
+    "id": "F-003",
+    "title": "Continuous capture via Claude Code hooks (`capture --from-hook`, `install-hooks`)",
+    "acceptance": [
+      "`echo '{\"session_id\":\"<id>\",\"transcript_path\":\"<fixture path>\",\"cwd\":\"<dir>\",\"hook_event_name\":\"Stop\"}' | checkpoint capture --from-hook` reads the hook JSON from stdin, syncs the transcript at `transcript_path` into the working buffer, and exits 0",
+      "Simulated continuous capture: a test that appends a transcript fixture to a temp JSONL file in several chunks and invokes `capture --from-hook` (as Stop / UserPromptSubmit events) after each chunk ends with a conversation identical to a one-shot capture of the full file, with no duplicates",
+      "The hook path never breaks the host agent: malformed stdin JSON, a missing `transcript_path`, or a transcript file that does not exist each make `capture --from-hook` exit 0 (with at most a message on stderr) and leave the store unchanged",
+      "`checkpoint install-hooks` writes/merges `.claude/settings.json` in the project directory so that `Stop`, `UserPromptSubmit`, `PreCompact` and `SessionEnd` each run `checkpoint capture --from-hook`, and `SessionStart` runs the resume-injection hook command (F-005), using the config shape `{\"hooks\":{\"Stop\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"...\"}]}]}}`; the output file is valid JSON",
+      "`checkpoint install-hooks` preserves existing unrelated keys and existing hook entries in a pre-existing `.claude/settings.json`, and running it twice does not add duplicate entries"
+    ]
+  },
+  {
+    "id": "F-004",
+    "title": "Checkpoints with git history (`checkpoint save`, `list`, `show`)",
+    "acceptance": [
+      "After capturing a fixture, `checkpoint save \"forecasting-v1\"` exits 0, writes `.ai-checkpoint/checkpoints/cp-001.json`, and prints output in the shape of MVP section 30: `Checkpoint created:` followed by `cp-001`, and `Git commit:` followed by the short commit hash",
+      "The checkpoint JSON contains `checkpoint_id`, `name`, `conversation_id`, `provider`, `created_at`, `messages` (a full snapshot of the current conversation's messages), `state` with keys `objective`, `decisions`, `completed_work`, `open_questions`, `next_steps`, `artifacts` (empty list) and `metadata`",
+      "Each save creates exactly one new commit in the `.ai-checkpoint` repo with subject `checkpoint: cp-NNN - <name>` and the checkpoint file in that commit; the short hash printed by save equals `git -C .ai-checkpoint log -1 --format=%h`",
+      "Checkpoint IDs increase sequentially (`cp-001`, `cp-002`, `cp-003`) and are never reused",
+      "Test 2 (MVP section 18): with a 60-message fixture captured incrementally, saving after messages 1-20, 21-40 and 41-60 gives cp-001 with exactly messages 1-20, cp-002 with 1-40 and cp-003 with 1-60; after all three saves, `cp-001.json` and `cp-002.json` are byte-identical to their content in the commits that created them (`git -C .ai-checkpoint diff <cp-001 commit> HEAD -- checkpoints/cp-001.json` is empty)",
+      "`checkpoint list` prints one line per checkpoint in order, each with the ID and name (e.g. `cp-001   forecasting-v1`) plus created time; with no checkpoints it prints a 'no checkpoints' message and exits 0",
+      "`checkpoint show cp-001` prints the checkpoint's metadata (id, name, conversation id, provider, created_at, message count, commit hash) and `checkpoint show cp-001 --json` prints valid JSON of the stored checkpoint",
+      "`checkpoint show cp-999` and `checkpoint resume cp-999` exit non-zero with a 'checkpoint not found' message and no traceback",
+      "`checkpoint save \"x\"` when nothing has been captured yet exits non-zero with a clear message and creates no checkpoint file or commit",
+      "Previous checkpoint versions are retrievable from git: `git -C .ai-checkpoint log --oneline` lists one `checkpoint:` commit per saved checkpoint",
+      "No secrets reach git: after capturing the secret-bearing fixture and saving, `git -C .ai-checkpoint log -p --all` contains none of the original secret strings"
+    ]
+  },
+  {
+    "id": "F-005",
+    "title": "Resume context and SessionStart injection (`checkpoint resume`)",
+    "acceptance": [
+      "`checkpoint resume cp-001` exits 0, prints `Checkpoint loaded.` (to stderr or as a header line) and prints a resume context to stdout that begins with `You are continuing work from checkpoint cp-001` and includes the checkpoint name, an objective section, sections for decisions / completed work / open questions / next steps (showing 'none recorded' or omitted when empty), and a `RELEVANT CONVERSATION HISTORY` section",
+      "The history section contains every user and assistant message of the checkpoint, in order, labelled by role, with full text (raw history, no compression): for the 50-message fixture each of the 50 message texts appears in the output exactly once and in the original order",
+      "The objective defaults to the first human user message of the checkpoint when no explicit objective was recorded; `checkpoint save NAME --objective TEXT --next-step TEXT` (repeatable `--next-step`) stores these in `state` and they appear in the resume output",
+      "`checkpoint resume cp-001 --out ctx.md` writes the same context to the file, which a user can paste into a new conversation",
+      "Resuming cp-001 after cp-002 and cp-003 exist produces context containing only cp-001's messages (none from later checkpoints)",
+      "`checkpoint resume cp-001 --on-next-start` records a pending resume; then piping a SessionStart hook payload (`{\"session_id\":...,\"hook_event_name\":\"SessionStart\",\"source\":\"startup\",...}`) into the SessionStart hook command prints JSON of the form `{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"<resume context for cp-001>\"}}` and exits 0; a second SessionStart invocation prints nothing (pending resume consumed)",
+      "The SessionStart hook command with no pending resume, or with malformed stdin, exits 0 and prints nothing to stdout"
+    ]
+  },
+  {
+    "id": "F-006",
+    "title": "Optional MCP server exposing checkpoint tools",
+    "acceptance": [
+      "A server module (e.g. `ai_checkpoint.mcp.server`) defines tools `save_checkpoint(name)`, `list_checkpoints()`, `get_checkpoint(checkpoint_id)` and `resume_checkpoint(checkpoint_id)` whose underlying functions can be called in-process in a test without starting a transport",
+      "In-process: `save_checkpoint` after a capture returns `{\"checkpoint_id\": \"cp-001\", \"commit\": \"<hash>\"}` and creates the same file and git commit as the CLI; `list_checkpoints` returns a list of `{\"id\",\"name\",\"created_at\"}`; `get_checkpoint` returns the checkpoint's metadata/state; `resume_checkpoint` returns the same resume context text as `checkpoint resume`",
+      "`get_checkpoint` / `resume_checkpoint` with an unknown ID return or raise a clear 'checkpoint not found' error rather than crashing the server",
+      "If `mcp` is pip-installable in the sandbox: after `pip install -e .[mcp]`, launching the server over stdio (e.g. `checkpoint mcp` or `python -m ai_checkpoint.mcp.server`) and sending MCP `initialize` + `tools/list` returns exactly the four tool names above with input schemas; a `tools/call` of `list_checkpoints` succeeds",
+      "Without `mcp` installed, `checkpoint mcp` exits non-zero with a message saying to install the `mcp` extra, and all other CLI commands still work"
+    ]
+  }
+]
