@@ -1,0 +1,372 @@
+{
+  "name": "data_analysis-20",
+  "description": "Data-analysis task: explain a Q3 churn increase for finance. Two decisions with reasons and rejected options, a number, a command and a line of pandas code to reproduce verbatim, a corrected customer count, a renamed notebook, an abandoned downloads folder and a fake password pasted into the chat.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "I'm analysing why subscriber churn rose in Q3 for finance, who want an explanation by Friday. The project is subscriber-health at ~/work/subscriber-health, branch analysis/q3-lapses, last commit 39f040d Load payments and plans into duckdb. The billing vendor sent three CSVs (subscriptions, payments, plans) that I downloaded into ~/Downloads/vendor_export/. I already pulled the plans table through the Snowflake connector, and my first look is in notebooks/churn_eda.ipynb. I work in pandas and jupyter, and duckdb for quick joins. Where should we start?"
+    },
+    {
+      "role": "assistant",
+      "content": "Start by getting the three tables into one place with a clear grain, one row per customer for the headline analysis, and by agreeing what 'churn' means, because every later number depends on it. Then a short EDA: tenure distribution, plan mix, and churn by signup month. Could you paste the column lists of the three CSVs?"
+    },
+    {
+      "role": "user",
+      "content": "Columns: subscriptions has customer_id, plan_id, start_date, churn_date, cancel_flag, is_test; payments has customer_id, paid_at, amount_cents, status; plans has plan_id, plan_name, monthly_price. I exported `SNOWFLAKE_PASSWORD=sk-fake-ee69cdf12980ef1cb41474d1` to pull the plans table, but I've saved the table to data/raw/ so I'm done with Snowflake."
+    },
+    {
+      "role": "assistant",
+      "content": "Thanks, that's enough to plan the joins: payments to subscriptions on customer_id, plans on plan_id. I'd keep an eye on `is_test`, since test accounts usually leak into vendor exports. Please don't paste credentials into chats; if that password is real, rotate it. Since the plans table is saved locally, there is no need to touch the Snowflake connection again."
+    },
+    {
+      "role": "user",
+      "content": "So how should we define churn? I can see a few candidates in the data."
+    },
+    {
+      "role": "assistant",
+      "content": "Three candidates. (1) The cancel flag: easy and unambiguous, but it only captures customers who actively cancelled. (2) No successful payment for N days: it captures silent lapses, and N should match the billing cycle plus a grace period. (3) Downgrading to the free plan: a softer signal, better treated as a separate outcome. For a revenue question, option 2 usually tracks reality best."
+    },
+    {
+      "role": "user",
+      "content": "Let's go with no successful payment for 60 days. I don't want the cancel_flag column, because many customers just stop paying and never cancel. I've copied the CSVs to data/raw/, so I'm done with ~/Downloads/vendor_export/; ignore that downloads folder from now on, and I'm not going to open files in Excel any more. After dropping duplicates I have 46,910 customers."
+    },
+    {
+      "role": "assistant",
+      "content": "Good. With that definition a customer is churned on the first day their payment gap exceeds 60 days. To get tenure, this is the line I'd use:\n\n```python\ndf[\"tenure_days\"] = (df[\"churn_date\"].fillna(AS_OF) - df[\"start_date\"]).dt.days\n```\n\nCustomers who have not churned are censored at AS_OF, which is why the fillna is there."
+    },
+    {
+      "role": "user",
+      "content": "I've got dates in three formats in one column. What now?"
+    },
+    {
+      "role": "assistant",
+      "content": "Parse with an explicit format per pattern, using `pd.to_datetime(..., format=..., errors='coerce')`, then look at the rows that came out as NaT to see what you missed. Avoid relying on automatic inference because day-month ordering is ambiguous."
+    },
+    {
+      "role": "user",
+      "content": "Now the model. Finance will want the drivers of churn, so I was leaning towards gradient-boosted trees, since they usually score higher. Is that the right call?"
+    },
+    {
+      "role": "assistant",
+      "content": "They often do score a little higher, but the gain is usually small on tabular data like this, and you pay for it in explainability. A logistic regression gives one coefficient per feature, and odds ratios that finance can read in a sentence. Given the audience, I would start with the logistic regression and only revisit trees if its fit is clearly poor."
+    },
+    {
+      "role": "user",
+      "content": "Agreed: logistic regression, and no gradient-boosted trees, because finance needs coefficients they can read. I also renamed notebooks/churn_eda.ipynb to notebooks/01_churn_eda.ipynb so the notebooks sort in order."
+    },
+    {
+      "role": "assistant",
+      "content": "Noted, I'll refer to notebooks/01_churn_eda.ipynb from here on. The plan: build one feature table (tenure, plan, price, signup month, payment failures in the first 90 days), standardise the numeric columns on the training split, fit with an L2 penalty, and report odds ratios with confidence intervals."
+    },
+    {
+      "role": "user",
+      "content": "Can you explain what a confusion matrix is telling me beyond accuracy?"
+    },
+    {
+      "role": "assistant",
+      "content": "It splits errors into false positives and false negatives, which usually have different costs. In a retention setting, missing a customer who leaves is typically a different kind of mistake from flagging one who stays."
+    },
+    {
+      "role": "user",
+      "content": "A correction to my earlier count: I forgot to exclude the internal test accounts (is_test), and after removing them it's 46,088 customers, not 46,910. I rebuild the features with `python scripts/build_features.py --since 2025-02-01 --out data/features.parquet`. After the rebuild the overall churn rate is 0.2373. The finance KPI definitions are on https://wiki.example.test/finance/subscriber-health/kpi-definitions, and I want to use the dataviz skill for the charts."
+    },
+    {
+      "role": "assistant",
+      "content": "Thanks, that matters: 46,910 would have included accounts that never pay. I'll treat 46,088 as the population from now on. A churn rate of 0.2373 is the headline number, and I'll keep it with the definition next to it on every chart so it cannot be misread. I'll follow the KPI wiki for naming."
+    },
+    {
+      "role": "user",
+      "content": "I need to wrap up for the day. Can you summarise where we are and what's next?"
+    },
+    {
+      "role": "assistant",
+      "content": "Where we are: churn is defined as no payment for 60 days, the population is the test-free customer set, features are built by the script, and the model choice is a logistic regression. Next step: re-run the logistic regression on the rebuilt features, then draft the three-slide finance summary in Google Drive. Work lives on branch analysis/q3-lapses in notebooks/01_churn_eda.ipynb."
+    }
+  ],
+  "probes": [
+    {
+      "kind": "decision",
+      "target": "decisions[0]",
+      "question": "What did we decide about how to define churn, why, and which option did we reject?",
+      "key_facts": [
+        "Churn means no successful payment for 60 days",
+        "many customers lapse without ever pressing cancel, so the cancel flag misses a large share of real churn",
+        "the cancel_flag column"
+      ],
+      "must_not_contradict": [
+        "Churn means no successful payment for 60 days"
+      ],
+      "known_wrong": [
+        "Churn is defined by the cancel_flag column"
+      ]
+    },
+    {
+      "kind": "decision",
+      "target": "decisions[1]",
+      "question": "What did we decide about which model to fit, why, and what did we rule out?",
+      "key_facts": [
+        "Fit a logistic regression",
+        "finance needs coefficients they can read and explain, and a more complex model would add little",
+        "gradient-boosted trees"
+      ],
+      "must_not_contradict": [
+        "Fit a logistic regression"
+      ],
+      "known_wrong": [
+        "The team chose gradient-boosted trees"
+      ]
+    },
+    {
+      "kind": "decision",
+      "target": "decisions[0]",
+      "question": "Which churn signal did we decide not to use, and what was the reason?",
+      "key_facts": [
+        "the cancel_flag column",
+        "many customers lapse without ever pressing cancel, so the cancel flag misses a large share of real churn"
+      ],
+      "known_wrong": [
+        "the cancel_flag column defines churn"
+      ]
+    },
+    {
+      "kind": "verbatim",
+      "target": "verbatim[0]",
+      "question": "What is the exact overall churn rate we reported after the rebuild? Give the number as written.",
+      "key_facts": [
+        "0.2373"
+      ]
+    },
+    {
+      "kind": "verbatim",
+      "target": "verbatim[1]",
+      "question": "What is the exact command I use to rebuild the features? Quote it exactly.",
+      "key_facts": [
+        "python scripts/build_features.py --since 2025-02-01 --out data/features.parquet"
+      ]
+    },
+    {
+      "kind": "verbatim",
+      "target": "verbatim[2]",
+      "question": "Quote exactly the line of code we use to compute tenure.",
+      "key_facts": [
+        "df[\"tenure_days\"] = (df[\"churn_date\"].fillna(AS_OF) - df[\"start_date\"]).dt.days"
+      ]
+    },
+    {
+      "kind": "stale",
+      "target": "correction",
+      "question": "How many customers are in the analysis population now (the current count)?",
+      "key_facts": [
+        "46,088"
+      ],
+      "known_wrong": [
+        "46,910"
+      ]
+    },
+    {
+      "kind": "next_step",
+      "target": "next_step",
+      "question": "What is the next step I planned to do when I come back?",
+      "key_facts": [
+        "Re-run the logistic regression on the rebuilt features, then draft the three-slide finance summary in Google Drive"
+      ]
+    },
+    {
+      "kind": "fact",
+      "target": "environment.files",
+      "question": "What is the current path of the exploratory notebook?",
+      "key_facts": [
+        "notebooks/01_churn_eda.ipynb"
+      ],
+      "known_wrong": [
+        "The notebook is still notebooks/churn_eda.ipynb"
+      ]
+    },
+    {
+      "kind": "fact",
+      "target": "environment.access",
+      "question": "Which folder did we stop using, so it should not be accessed again?",
+      "key_facts": [
+        "~/Downloads/vendor_export/"
+      ]
+    },
+    {
+      "kind": "fact",
+      "target": "environment.env_vars",
+      "question": "Which environment variable names did this work use (names only)?",
+      "key_facts": [
+        "SNOWFLAKE_PASSWORD",
+        "ANALYTICS_DB_PATH"
+      ]
+    }
+  ],
+  "answer_key": {
+    "decisions": [
+      {
+        "topic": "how to define churn",
+        "decision": "Churn means no successful payment for 60 days",
+        "reason": "many customers lapse without ever pressing cancel, so the cancel flag misses a large share of real churn",
+        "rejected": "the cancel_flag column"
+      },
+      {
+        "topic": "which model to fit",
+        "decision": "Fit a logistic regression",
+        "reason": "finance needs coefficients they can read and explain, and a more complex model would add little",
+        "rejected": "gradient-boosted trees"
+      }
+    ],
+    "verbatim": [
+      {
+        "label": "overall churn rate after the rebuild",
+        "type": "number",
+        "text": "0.2373"
+      },
+      {
+        "label": "command to rebuild the features",
+        "type": "command",
+        "text": "python scripts/build_features.py --since 2025-02-01 --out data/features.parquet"
+      },
+      {
+        "label": "line computing tenure",
+        "type": "code",
+        "text": "df[\"tenure_days\"] = (df[\"churn_date\"].fillna(AS_OF) - df[\"start_date\"]).dt.days"
+      }
+    ],
+    "correction": {
+      "what": "size of the analysis population",
+      "old": "46,910",
+      "new": "46,088"
+    },
+    "next_step": {
+      "text": "Re-run the logistic regression on the rebuilt features, then draft the three-slide finance summary in Google Drive",
+      "required_terms": [
+        "logistic",
+        "slide"
+      ]
+    }
+  },
+  "environment": {
+    "files": [
+      {
+        "path": "notebooks/01_churn_eda.ipynb",
+        "status": "still_relevant",
+        "note": "exploratory notebook",
+        "trap": "renamed_file_new"
+      },
+      {
+        "path": "notebooks/churn_eda.ipynb",
+        "status": "done_with",
+        "note": "renamed to notebooks/01_churn_eda.ipynb",
+        "trap": "renamed_file_old"
+      },
+      {
+        "path": "data/raw/",
+        "status": "still_relevant",
+        "note": "CSV exports copied from the vendor folder"
+      },
+      {
+        "path": "data/features.parquet",
+        "status": "still_relevant",
+        "note": "built by scripts/build_features.py"
+      },
+      {
+        "path": "scripts/build_features.py",
+        "status": "still_relevant"
+      }
+    ],
+    "repos": [
+      {
+        "path": "~/work/subscriber-health",
+        "branch": "analysis/q3-lapses",
+        "last_commit": "39f040d Load payments and plans into duckdb",
+        "status": "still_relevant"
+      }
+    ],
+    "access": [
+      {
+        "path": "~/work/subscriber-health",
+        "status": "still_relevant"
+      },
+      {
+        "path": "~/Downloads/vendor_export/",
+        "status": "done_with",
+        "note": "vendor CSVs, copied to data/raw/",
+        "trap": "abandoned_folder"
+      }
+    ],
+    "connectors": [
+      {
+        "name": "Snowflake",
+        "status": "done_with",
+        "note": "plans table already exported"
+      },
+      {
+        "name": "Google Drive",
+        "status": "still_relevant",
+        "note": "finance summary goes here"
+      }
+    ],
+    "tools": [
+      {
+        "name": "pandas",
+        "status": "still_relevant"
+      },
+      {
+        "name": "jupyter",
+        "status": "still_relevant"
+      },
+      {
+        "name": "duckdb",
+        "status": "still_relevant"
+      },
+      {
+        "name": "Excel",
+        "status": "done_with"
+      }
+    ],
+    "env_vars": [
+      {
+        "name": "SNOWFLAKE_PASSWORD",
+        "status": "done_with",
+        "trap": "secret_in_chat"
+      },
+      {
+        "name": "ANALYTICS_DB_PATH",
+        "status": "still_relevant"
+      }
+    ],
+    "skills": [
+      {
+        "name": "dataviz",
+        "status": "still_relevant"
+      }
+    ],
+    "references": [
+      {
+        "name": "Finance KPI definitions",
+        "url": "https://wiki.example.test/finance/subscriber-health/kpi-definitions",
+        "status": "still_relevant"
+      }
+    ]
+  },
+  "secret_values": [
+    "sk-fake-ee69cdf12980ef1cb41474d1"
+  ],
+  "meta": {
+    "seed": 7,
+    "task": "data_analysis",
+    "length": 20,
+    "generator": "handover-v1",
+    "correction_old_index": 6,
+    "correction_new_index": 16,
+    "rename_index": 12,
+    "abandon_index": 6,
+    "next_step_index": 18,
+    "filler_indexes": [
+      8,
+      9,
+      14,
+      15
+    ]
+  }
+}

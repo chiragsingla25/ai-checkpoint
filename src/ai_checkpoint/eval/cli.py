@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 from typing import List, Optional
 
 from ..errors import CheckpointError
+from .generate import generate_dataset
 from .models import DEFAULT_MODELS, MODEL_CHOICES, MODEL_ENV, make_model
 from .pipeline import run_scenario
 from .report import markdown_table, write_outputs
@@ -27,11 +29,31 @@ def build_parser() -> argparse.ArgumentParser:
                    + ", ".join(f"{k}={v}" for k, v in DEFAULT_MODELS.items())
                    + "; env overrides: " + ", ".join(MODEL_ENV.values()) + ")")
     r.add_argument("--out", required=True, help="output directory (created if missing)")
+    g = sub.add_parser("generate", help="generate the handover dataset (6 scenario files; no model needed)")
+    g.add_argument("--seed", type=int, default=7, help="integer seed (default 7; the committed dataset uses 7)")
+    g.add_argument("--out", required=True, help="output directory (created if missing)")
     return p
+
+
+def _generate(args) -> int:
+    out = Path(args.out)
+    if out.exists() and not out.is_dir():
+        print(f"error: --out {out} exists and is not a directory", file=sys.stderr)
+        return 1
+    try:
+        paths = generate_dataset(args.seed, out)
+    except OSError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    for p in paths:
+        print(p)
+    return 0
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "generate":
+        return _generate(args)
     try:
         scenario = load_scenario(args.scenario)
         model = make_model(args.model, args.model_name)

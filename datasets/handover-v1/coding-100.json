@@ -1,0 +1,773 @@
+{
+  "name": "coding-100",
+  "description": "Coding task: stop a Flask webhook service from sending duplicate customer texts. Two decisions with reasons and rejected options, a number, a command and a SQL statement to reproduce verbatim, a corrected retention value, a renamed module, an abandoned scratch folder and a fake secret pasted into the chat.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "I'm working on dispatch-relay, a small Flask service that receives delivery-status webhooks from our carrier and texts the customer. The repo is at ~/work/dispatch-relay, I'm on branch fix/webhook-dedupe, and the last commit is fb04dde Verify webhook signature before parsing. The problem: when our endpoint is slow the carrier retries the delivery, and customers get the same 'out for delivery' text two or three times. Support has logged 26 complaints this week (thread SUP-2464). I saved some raw payloads from the carrier's sandbox in ~/scratch/dispatch-relay-carrier-samples/ and the webhook code lives in app/handlers.py. I use pytest and ruff, and the GitHub connector is attached to this chat if you want to look at the PR. Can we fix the duplicate texts?"
+    },
+    {
+      "role": "assistant",
+      "content": "Yes. Two things are probably going on: the same event is delivered more than once, and our handler has no memory of which events it already processed. That makes the fix a matter of idempotency rather than speed alone. Could you paste the handler and one raw payload? I'd like to see whether each delivery carries a stable event identifier we can key on."
+    },
+    {
+      "role": "user",
+      "content": "Do you think a README section on local setup is worth the time?"
+    },
+    {
+      "role": "assistant",
+      "content": "Yes, five lines: create the virtualenv, install requirements, set the environment variable names the app reads, run the tests, start the app. New contributors will thank you, and so will future you after a laptop swap."
+    },
+    {
+      "role": "user",
+      "content": "What's your take on retry decorators around the outbound SMS call?"
+    },
+    {
+      "role": "assistant",
+      "content": "Only retry errors that are likely transient, like timeouts and 5xx, with a small cap and some jitter. Do not retry 4xx. And remember retries multiply load during an outage, so keep the cap low."
+    },
+    {
+      "role": "user",
+      "content": "Can you remind me why we call `request.get_json(silent=True)` in some places and not others?"
+    },
+    {
+      "role": "assistant",
+      "content": "`silent=True` returns None instead of raising when the body is not valid JSON, so you can return your own error message. Without it Flask raises a 400 for you. Either is fine, but pick one and use it everywhere in dispatch-relay so the behaviour is predictable."
+    },
+    {
+      "role": "user",
+      "content": "What's the difference between `raise` and `raise e` inside an except block? A reviewer flagged it."
+    },
+    {
+      "role": "assistant",
+      "content": "A bare `raise` re-raises the active exception and keeps the original traceback intact. `raise e` also works in Python 3 but adds a frame to the traceback, which is noise. Prefer the bare form, or `raise NewError(...) from e` when you want to wrap."
+    },
+    {
+      "role": "user",
+      "content": "Could you explain how the `before_request` hook differs from a decorator on the view?"
+    },
+    {
+      "role": "assistant",
+      "content": "A `before_request` hook runs for every request to the app or blueprint it is registered on, so it suits cross-cutting work like request ids. A decorator applies only to the views you wrap, which is clearer for something like auth that some routes skip."
+    },
+    {
+      "role": "user",
+      "content": "Does it matter whether I return `jsonify(...)` or a plain tuple from the view?"
+    },
+    {
+      "role": "assistant",
+      "content": "Both work. Returning a dict directly is the shortest in current Flask, it is converted to JSON for you. Use `jsonify` or `make_response` when you also need to set headers or an unusual status."
+    },
+    {
+      "role": "user",
+      "content": "How noisy should a service be at startup? Mine prints about twenty lines."
+    },
+    {
+      "role": "assistant",
+      "content": "A few lines are useful: version, environment name, and which optional features are on. Anything beyond that belongs at DEBUG. Never print configuration values that could be secrets."
+    },
+    {
+      "role": "user",
+      "content": "What's a sensible request timeout when we call the SMS gateway from the service?"
+    },
+    {
+      "role": "assistant",
+      "content": "Set a connect timeout and a read timeout separately, a couple of seconds for connect and somewhat longer for read. A single large number hides problems. Also make sure the timeout surfaces as a logged warning, not a silent drop."
+    },
+    {
+      "role": "user",
+      "content": "What would you check first if the service suddenly starts using more memory?"
+    },
+    {
+      "role": "assistant",
+      "content": "Look for unbounded collections that grow with traffic, such as module-level lists or caches without a size limit, and for request bodies held in memory longer than needed. A heap snapshot from a staging run beats guessing."
+    },
+    {
+      "role": "user",
+      "content": "Here's the handler from app/handlers.py:\n\n```python\n@bp.route(\"/webhooks/carrier\", methods=[\"POST\"])\ndef carrier_webhook():\n    payload = request.get_json()\n    if not verify_signature(payload, request.headers.get(\"X-Carrier-Signature\", \"\")):\n        return \"bad signature\", 401\n    notify_customer(payload[\"tracking_id\"], payload[\"status\"])\n    return \"ok\", 200\n```\n\nEvery payload has an `event_id` like `evt_9f3a`. One more thing: locally the signature check keeps failing even though I exported `CARRIER_WEBHOOK_SECRET=sk-fake-9cae311edb88f13dec833064` and `DATABASE_URL` for my local Postgres. I also pulled the failing deliveries up through the Sentry connector earlier, and I've seen what I needed there."
+    },
+    {
+      "role": "assistant",
+      "content": "Good, `event_id` is the key we need. On the signature failure: `verify_signature` is receiving the parsed JSON, so it probably re-serialises it and the bytes no longer match what the carrier signed. Compute the HMAC over the raw body from `request.get_data()` instead, and parse JSON afterwards. Also, avoid pasting real secrets into chats like this one; if that value is real, rotate it. For the duplicates, nothing in this handler remembers an event, so a retry runs `notify_customer` again."
+    },
+    {
+      "role": "user",
+      "content": "I'm getting `RuntimeError: Working outside of application context` in a test. What am I missing?"
+    },
+    {
+      "role": "assistant",
+      "content": "Something is touching `current_app` or `g` outside a request or app context. In tests, either use the `app.app_context()` block, or use the test client, which pushes a request context for you. A fixture that yields inside `with app.app_context():` is the usual fix."
+    },
+    {
+      "role": "user",
+      "content": "Thanks, that helps. Unrelated: how should I name the test functions so failures read well in CI?"
+    },
+    {
+      "role": "assistant",
+      "content": "Name them after the behaviour, for example `test_unknown_status_is_ignored`, not after the function under test. When a test fails in CI the name is often the only thing people read, so it should say what broke."
+    },
+    {
+      "role": "user",
+      "content": "Is `requests` fine for the outbound SMS call or should I move to `httpx`?"
+    },
+    {
+      "role": "assistant",
+      "content": "`requests` is fine here. Move to `httpx` when you need async or HTTP/2, not before. Whichever you use, reuse a single `Session` so connections are pooled rather than opened for every message."
+    },
+    {
+      "role": "user",
+      "content": "I keep forgetting how to run a single test with a debugger attached. Remind me?"
+    },
+    {
+      "role": "assistant",
+      "content": "Run it with `pytest -x --pdb path::test_name` to drop into the debugger on the first failure, or put `breakpoint()` in the code and run with `-s` so pytest does not swallow the prompt."
+    },
+    {
+      "role": "user",
+      "content": "The customer success team wants a daily count of notifications sent. Is that a separate project?"
+    },
+    {
+      "role": "assistant",
+      "content": "It can be a small one. The cheapest start is a structured log line per notification plus a saved query in your log tool. If they later want a dashboard with history, you can add a counter metric, but do not build it before they confirm they need it."
+    },
+    {
+      "role": "user",
+      "content": "Can you suggest a sane layout for the tests folder? Mine has grown organically."
+    },
+    {
+      "role": "assistant",
+      "content": "Mirror the package: `tests/test_<module>.py` for unit tests, a `tests/conftest.py` for shared fixtures, and a `tests/fixtures/` folder for static payloads. Keep slow or network tests behind a marker so the default run stays fast."
+    },
+    {
+      "role": "user",
+      "content": "Can you give me a one-line explanation of idempotency I can put in the PR description?"
+    },
+    {
+      "role": "assistant",
+      "content": "An operation is idempotent if doing it twice leaves the system in the same state as doing it once, so a retried request cannot cause a second side effect."
+    },
+    {
+      "role": "user",
+      "content": "OK, noted on the secret. Back to the duplicates: what are my options for remembering which event ids we've already handled?"
+    },
+    {
+      "role": "assistant",
+      "content": "Three realistic options. (1) Redis with SETNX and an expiry: fast and the expiry is built in, but it adds a service to run. (2) A Postgres table keyed by event_id with a unique constraint: you already run Postgres, the insert is atomic so two workers cannot both win, and cleanup is a scheduled delete. (3) An in-memory set: simplest, but it is lost on restart and not shared between workers, so duplicates would still slip through. If you cannot add infrastructure, option 2 is the one I'd pick."
+    },
+    {
+      "role": "user",
+      "content": "We don't have Redis and the platform team won't provision it before next quarter, so go with the Postgres table and a unique constraint on event_id. I'm also done with the samples folder ~/scratch/dispatch-relay-carrier-samples/: I copied the three useful payloads into tests/fixtures/, so please stop looking in that scratch folder, and I don't need ngrok any more since fixtures replace live sandbox traffic. Keep the dedupe rows for 24 hours and then delete them."
+    },
+    {
+      "role": "assistant",
+      "content": "Agreed. The insert is the whole idempotency check: if it inserts a row we process the event, if the conflict clause swallows it we skip. This is the statement I'd use:\n\n```sql\nINSERT INTO webhook_events (event_id, received_at) VALUES (%s, now()) ON CONFLICT (event_id) DO NOTHING;\n```\n\nCheck the affected row count (`cur.rowcount`): 1 means new, 0 means duplicate. A scheduled cleanup then runs `DELETE FROM webhook_events WHERE received_at < now() - interval '24 hours';`."
+    },
+    {
+      "role": "user",
+      "content": "Quick tangent: should I be logging the full request body when something fails, or is that a bad idea?"
+    },
+    {
+      "role": "assistant",
+      "content": "Log the identifiers and the failure reason, not the whole body. Bodies can hold customer phone numbers and addresses, and they bloat the logs. If you need the body for debugging, log it at DEBUG behind a flag you can switch on temporarily."
+    },
+    {
+      "role": "user",
+      "content": "I want to leave a TODO in the code for later. Any convention?"
+    },
+    {
+      "role": "assistant",
+      "content": "Include your name or a ticket reference and say what triggers the work, for example `# TODO(chirag): drop once the carrier v2 payloads are live`. A bare TODO tends to live forever."
+    },
+    {
+      "role": "user",
+      "content": "What should the service do when the carrier sends a status we don't recognise?"
+    },
+    {
+      "role": "assistant",
+      "content": "Log it at warning level with the raw status string, return 200 so the carrier does not keep retrying, and skip the customer notification. Then add the new status to the mapping when someone confirms what it means."
+    },
+    {
+      "role": "user",
+      "content": "What's the polite way to tell a teammate their PR needs tests?"
+    },
+    {
+      "role": "assistant",
+      "content": "Be specific and offer a path: point to the behaviour that is not covered, suggest the smallest test that would catch a regression, and offer to pair if the setup is awkward. Reviews land better when the ask is concrete."
+    },
+    {
+      "role": "user",
+      "content": "Our CI takes a while to install dependencies. Any cheap wins?"
+    },
+    {
+      "role": "assistant",
+      "content": "Cache the pip download directory keyed on the hash of the requirements file, and install with `--no-deps` once the lock file is trusted. Splitting dev-only tools into a separate file also helps jobs that only need the runtime."
+    },
+    {
+      "role": "user",
+      "content": "Do you think I should add a CHANGELOG entry for this fix?"
+    },
+    {
+      "role": "assistant",
+      "content": "If the project already keeps one, yes: one line saying what users of the service will notice, which here is fewer repeated customer messages. If there is no changelog, the PR description is enough, do not start a new convention for one fix."
+    },
+    {
+      "role": "user",
+      "content": "Is it normal for the first request after deploy to be slow?"
+    },
+    {
+      "role": "assistant",
+      "content": "Yes, usually imports, connection pool warm-up and lazy initialisation. If it is long enough to trip upstream timeouts, add a warm-up step or readiness delay so traffic only arrives after the first successful self-check."
+    },
+    {
+      "role": "user",
+      "content": "Before I forget: what makes a good PR size for this team?"
+    },
+    {
+      "role": "assistant",
+      "content": "Small enough to review in one sitting, roughly a few hundred changed lines at most, and with one purpose. If a refactor is needed to make the fix easy, send it first as its own PR."
+    },
+    {
+      "role": "user",
+      "content": "Second problem: the handler sends the text synchronously, and that is why the carrier times out and retries in the first place. Should we put Celery in front of it?"
+    },
+    {
+      "role": "assistant",
+      "content": "Celery would work, but it needs a broker, and you've said no new infrastructure, so you would be back to asking for something you can't have. A simpler route is a module-level `ThreadPoolExecutor`: the handler verifies the signature, records the event id, submits the notification to the pool and returns 202 immediately. The cost is that queued work is lost if the process dies, but the carrier's own retry covers that gap now that duplicates are harmless."
+    },
+    {
+      "role": "user",
+      "content": "Good, use ThreadPoolExecutor(max_workers=8) and return 202 right away; Celery is out because it needs a broker we don't have. Also, I renamed app/handlers.py to app/webhooks.py so it matches the blueprint name, and updated the import in app/__init__.py. The signature check should reject timestamps older than 324 seconds to stop replays."
+    },
+    {
+      "role": "assistant",
+      "content": "Understood. I'll refer to app/webhooks.py from here on. The handler flow becomes: read raw body, verify the HMAC, reject if the timestamp is more than 324 seconds old, insert the event id, and only if the insert was new, submit `notify_customer` to the pool and return 202. Duplicates return 200 without notifying anyone, so the carrier stops retrying them."
+    },
+    {
+      "role": "user",
+      "content": "Anything I should know about running the app with gunicorn in production versus the dev server?"
+    },
+    {
+      "role": "assistant",
+      "content": "Use gunicorn with a small number of sync or gthread workers, set a worker timeout a bit above your slowest legitimate request, and put it behind your ingress. The Flask dev server is single-purpose and not hardened."
+    },
+    {
+      "role": "user",
+      "content": "Someone on the team suggested using dataclasses for the payload instead of dicts. Thoughts?"
+    },
+    {
+      "role": "assistant",
+      "content": "A small frozen dataclass for the fields you actually use makes typos fail loudly and gives you autocomplete. Keep parsing in one function that builds it, and leave unknown fields in an `extra` dict so new carrier fields do not break you."
+    },
+    {
+      "role": "user",
+      "content": "Do you have an opinion on f-strings versus `logging` lazy formatting?"
+    },
+    {
+      "role": "assistant",
+      "content": "For log calls, use the lazy form, `logger.info('sent %s', tracking_id)`. The string is only built if the level is enabled, and log platforms can group by the constant message. Everywhere else, f-strings are great."
+    },
+    {
+      "role": "user",
+      "content": "The product owner asked how confident we are that this fixes the complaints. What do I say?"
+    },
+    {
+      "role": "assistant",
+      "content": "Say what you can show: with the change, replaying the same delivery twice produces one message, covered by an automated test. What you cannot show yet is real carrier behaviour in production, so suggest watching the support queue for a week."
+    },
+    {
+      "role": "user",
+      "content": "How do I keep secrets out of the test output when a test fails and prints the environment?"
+    },
+    {
+      "role": "assistant",
+      "content": "Never print the whole environment. Configure the settings object so its `repr` masks secret fields, and keep test credentials in a dedicated fixture with obviously fake values so a leaked log line is harmless."
+    },
+    {
+      "role": "user",
+      "content": "How verbose should the commit messages be for a change like this?"
+    },
+    {
+      "role": "assistant",
+      "content": "A short imperative subject, then a paragraph of why: the symptom, the cause, and the approach. Reviewers can see what changed from the diff, so spend your words on the reasoning and any alternatives you ruled out."
+    },
+    {
+      "role": "user",
+      "content": "My ruff run is complaining about an unused import in a file I didn't touch. Ignore it?"
+    },
+    {
+      "role": "assistant",
+      "content": "Fix it in a separate commit so the review of the real change stays clean. `ruff check --fix` will remove it safely. If the same warning keeps coming back, check whether a star-import is re-exporting the name."
+    },
+    {
+      "role": "user",
+      "content": "Is it worth adding type hints to the notification helpers? The team is split on it."
+    },
+    {
+      "role": "assistant",
+      "content": "For small, stable helpers it is cheap and pays off when you refactor. Start with function signatures only, skip the clever generics, and let mypy run in CI in non-blocking mode for a week to see how noisy it is."
+    },
+    {
+      "role": "user",
+      "content": "We got a question from the security team about dependency pinning. What do you recommend?"
+    },
+    {
+      "role": "assistant",
+      "content": "Pin direct dependencies in a requirements file with exact versions, generate a lock file with hashes if your tooling supports it, and let a bot open update PRs weekly. That gives reproducible builds without letting versions rot."
+    },
+    {
+      "role": "user",
+      "content": "Can you explain what `pytest.mark.parametrize` is giving us over a for loop?"
+    },
+    {
+      "role": "assistant",
+      "content": "Each parameter set becomes its own test case with its own pass or fail, so one bad input does not hide the others, and the failing case is named in the output. Use `ids=` to make the names readable."
+    },
+    {
+      "role": "user",
+      "content": "One correction on retention: I checked the carrier's docs (https://docs.example-carrier.test/dispatch-relay/webhooks) and they keep retrying for up to 48 hours, so 24 hours was too short. Please use 48 hours for the cleanup. For the tests I run `pytest -q tests/test_webhooks.py -k dedupe` and I follow the python-testing skill's conventions."
+    },
+    {
+      "role": "assistant",
+      "content": "Thanks for catching that: with 24 hours a late retry could slip past cleanup and notify again. The cleanup interval becomes 48 hours, and I'll name the dedupe tests so that `-k dedupe` selects them. I'll keep to the python-testing conventions: one behaviour per test, fixtures from tests/fixtures/, no network."
+    },
+    {
+      "role": "user",
+      "content": "Can I rely on dict ordering when building the JSON response?"
+    },
+    {
+      "role": "assistant",
+      "content": "In Python 3.7+ dicts keep insertion order and Flask preserves it unless `JSON_SORT_KEYS` is set, but clients should never rely on key order in JSON. Treat it as cosmetic."
+    },
+    {
+      "role": "user",
+      "content": "Do I need to worry about timezone handling for the `received_at` timestamps?"
+    },
+    {
+      "role": "assistant",
+      "content": "Store everything in UTC and convert only when you render something for a person. Use timezone-aware datetimes in Python so you never compare naive and aware values, which fails at runtime and is annoying to track down."
+    },
+    {
+      "role": "user",
+      "content": "Can you explain what a Flask blueprint actually buys us in a service this small?"
+    },
+    {
+      "role": "assistant",
+      "content": "A blueprint groups routes, error handlers and templates so you can register them under a prefix and test them in isolation. For one endpoint it is optional, but it keeps the app factory tidy and makes it easy to add a health check route later."
+    },
+    {
+      "role": "user",
+      "content": "A colleague asked if we need an OpenAPI spec for a single webhook. Do we?"
+    },
+    {
+      "role": "assistant",
+      "content": "Not strictly. A short markdown description of the payload fields you rely on, with one example, gives most of the value. Write the spec when a second consumer or a client generator needs it."
+    },
+    {
+      "role": "user",
+      "content": "What status code should the endpoint return if the JSON is malformed? I've seen 400 and 422 used."
+    },
+    {
+      "role": "assistant",
+      "content": "400 is the safe choice for 'I could not parse this at all'. 422 fits better when the JSON parses but fails validation. Carriers rarely care which one you pick, as long as it is a 4xx so they do not treat it as a server fault."
+    },
+    {
+      "role": "user",
+      "content": "What's the cleanest way to freeze time in tests for anything that uses `datetime.now`?"
+    },
+    {
+      "role": "assistant",
+      "content": "Inject the clock: pass a `now` callable into the function and default it to `datetime.now`. That avoids patching globals. If injecting is too invasive, `freezegun` works, but it is a heavier hammer and slows large suites slightly."
+    },
+    {
+      "role": "user",
+      "content": "Should the health check endpoint touch the database?"
+    },
+    {
+      "role": "assistant",
+      "content": "Keep two probes if you can: a cheap liveness check that only returns 200, and a readiness check that runs `SELECT 1`. If the orchestrator restarts pods on a failing liveness probe, a slow database should not cause restart loops."
+    },
+    {
+      "role": "user",
+      "content": "I always forget the difference between a mock and a stub. Quick refresher?"
+    },
+    {
+      "role": "assistant",
+      "content": "A stub just returns canned answers so the code under test can proceed. A mock also records how it was called so you can assert on that. Prefer stubs and assert on outcomes, and keep mocks for interactions that are themselves the behaviour."
+    },
+    {
+      "role": "user",
+      "content": "I have to stop for today. Can you recap where we are and what's next?"
+    },
+    {
+      "role": "assistant",
+      "content": "Where we are: duplicates are handled by a webhook_events table with a unique event_id, notifications are sent from a thread pool with an immediate 202, and the signature check now uses the raw body. Next step: write migrations/0029_add_event_dedupe.sql (webhook_events table with a unique event_id), apply it on staging, then add the replay test that delivers the same event twice. The module is app/webhooks.py on branch fix/webhook-dedupe."
+    }
+  ],
+  "probes": [
+    {
+      "kind": "decision",
+      "target": "decisions[0]",
+      "question": "What did we decide about remembering which webhook events were already processed, why, and which alternative did we reject?",
+      "key_facts": [
+        "Record each event_id in a Postgres table webhook_events with a unique constraint",
+        "there is no Redis available and the platform team will not provision one before next quarter",
+        "Redis SETNX with an expiry"
+      ],
+      "must_not_contradict": [
+        "Record each event_id in a Postgres table webhook_events with a unique constraint"
+      ],
+      "known_wrong": [
+        "The team chose Redis SETNX with an expiry"
+      ]
+    },
+    {
+      "kind": "decision",
+      "target": "decisions[1]",
+      "question": "What did we decide about stopping the carrier's timeouts and retries, why, and what did we rule out?",
+      "key_facts": [
+        "Send the notification from a ThreadPoolExecutor(max_workers=8) and return 202 immediately",
+        "the carrier retries when the response takes too long, and a thread pool needs no new infrastructure",
+        "Celery"
+      ],
+      "must_not_contradict": [
+        "Send the notification from a ThreadPoolExecutor(max_workers=8) and return 202 immediately"
+      ],
+      "known_wrong": [
+        "The team chose Celery"
+      ]
+    },
+    {
+      "kind": "decision",
+      "target": "decisions[0]",
+      "question": "Which option did we rule out for recording processed event ids, and what was the reason?",
+      "key_facts": [
+        "Redis SETNX with an expiry",
+        "there is no Redis available and the platform team will not provision one before next quarter"
+      ],
+      "known_wrong": [
+        "Redis SETNX with an expiry is in use"
+      ]
+    },
+    {
+      "kind": "verbatim",
+      "target": "verbatim[0]",
+      "question": "What exact replay tolerance (in seconds) did we set for the signature timestamp? Give the number.",
+      "key_facts": [
+        "324"
+      ]
+    },
+    {
+      "kind": "verbatim",
+      "target": "verbatim[1]",
+      "question": "What is the exact command I use to run the dedupe tests? Quote it exactly.",
+      "key_facts": [
+        "pytest -q tests/test_webhooks.py -k dedupe"
+      ]
+    },
+    {
+      "kind": "verbatim",
+      "target": "verbatim[2]",
+      "question": "Quote exactly the SQL statement we settled on for recording a webhook event id.",
+      "key_facts": [
+        "INSERT INTO webhook_events (event_id, received_at) VALUES (%s, now()) ON CONFLICT (event_id) DO NOTHING;"
+      ]
+    },
+    {
+      "kind": "stale",
+      "target": "correction",
+      "question": "How many hours do we keep dedupe rows before the cleanup deletes them (the current value)?",
+      "key_facts": [
+        "48 hours"
+      ],
+      "known_wrong": [
+        "24 hours"
+      ]
+    },
+    {
+      "kind": "next_step",
+      "target": "next_step",
+      "question": "What is the next step I planned to do when I come back?",
+      "key_facts": [
+        "Write migrations/0029_add_event_dedupe.sql (webhook_events table with a unique event_id), apply it on staging, then add the replay test that delivers the same event twice"
+      ]
+    },
+    {
+      "kind": "fact",
+      "target": "environment.files",
+      "question": "What is the current file path of the webhook handler module?",
+      "key_facts": [
+        "app/webhooks.py"
+      ],
+      "known_wrong": [
+        "The handler is still in app/handlers.py"
+      ]
+    },
+    {
+      "kind": "fact",
+      "target": "environment.access",
+      "question": "Which folder did we stop using, so it should not be accessed again?",
+      "key_facts": [
+        "~/scratch/dispatch-relay-carrier-samples/"
+      ],
+      "known_wrong": []
+    },
+    {
+      "kind": "fact",
+      "target": "environment.env_vars",
+      "question": "Which environment variables (names only) does the service depend on?",
+      "key_facts": [
+        "CARRIER_WEBHOOK_SECRET",
+        "DATABASE_URL"
+      ]
+    }
+  ],
+  "answer_key": {
+    "decisions": [
+      {
+        "topic": "remembering which webhook events were already processed",
+        "decision": "Record each event_id in a Postgres table webhook_events with a unique constraint",
+        "reason": "there is no Redis available and the platform team will not provision one before next quarter",
+        "rejected": "Redis SETNX with an expiry"
+      },
+      {
+        "topic": "stopping the carrier's timeouts and retries",
+        "decision": "Send the notification from a ThreadPoolExecutor(max_workers=8) and return 202 immediately",
+        "reason": "the carrier retries when the response takes too long, and a thread pool needs no new infrastructure",
+        "rejected": "Celery"
+      }
+    ],
+    "verbatim": [
+      {
+        "label": "replay tolerance in seconds",
+        "type": "number",
+        "text": "324"
+      },
+      {
+        "label": "command to run the dedupe tests",
+        "type": "command",
+        "text": "pytest -q tests/test_webhooks.py -k dedupe"
+      },
+      {
+        "label": "SQL to record an event id",
+        "type": "code",
+        "text": "INSERT INTO webhook_events (event_id, received_at) VALUES (%s, now()) ON CONFLICT (event_id) DO NOTHING;"
+      }
+    ],
+    "correction": {
+      "what": "how long dedupe rows are kept",
+      "old": "24 hours",
+      "new": "48 hours"
+    },
+    "next_step": {
+      "text": "Write migrations/0029_add_event_dedupe.sql (webhook_events table with a unique event_id), apply it on staging, then add the replay test that delivers the same event twice",
+      "required_terms": [
+        "0029_add_event_dedupe.sql",
+        "staging",
+        "replay"
+      ]
+    }
+  },
+  "environment": {
+    "files": [
+      {
+        "path": "app/webhooks.py",
+        "status": "still_relevant",
+        "note": "webhook handler",
+        "trap": "renamed_file_new"
+      },
+      {
+        "path": "app/handlers.py",
+        "status": "done_with",
+        "note": "renamed to app/webhooks.py",
+        "trap": "renamed_file_old"
+      },
+      {
+        "path": "tests/test_webhooks.py",
+        "status": "still_relevant"
+      },
+      {
+        "path": "tests/fixtures/",
+        "status": "still_relevant",
+        "note": "saved carrier payloads"
+      },
+      {
+        "path": "migrations/0029_add_event_dedupe.sql",
+        "status": "still_relevant",
+        "note": "to be written next"
+      }
+    ],
+    "repos": [
+      {
+        "path": "~/work/dispatch-relay",
+        "branch": "fix/webhook-dedupe",
+        "last_commit": "fb04dde Verify webhook signature before parsing",
+        "status": "still_relevant"
+      }
+    ],
+    "access": [
+      {
+        "path": "~/work/dispatch-relay",
+        "status": "still_relevant"
+      },
+      {
+        "path": "~/scratch/dispatch-relay-carrier-samples/",
+        "status": "done_with",
+        "note": "sample payloads, copied to tests/fixtures/",
+        "trap": "abandoned_folder"
+      }
+    ],
+    "connectors": [
+      {
+        "name": "GitHub",
+        "status": "still_relevant"
+      },
+      {
+        "name": "Sentry",
+        "status": "done_with"
+      }
+    ],
+    "tools": [
+      {
+        "name": "pytest",
+        "status": "still_relevant"
+      },
+      {
+        "name": "ruff",
+        "status": "still_relevant"
+      },
+      {
+        "name": "ngrok",
+        "status": "done_with"
+      }
+    ],
+    "env_vars": [
+      {
+        "name": "CARRIER_WEBHOOK_SECRET",
+        "status": "still_relevant",
+        "trap": "secret_in_chat"
+      },
+      {
+        "name": "DATABASE_URL",
+        "status": "still_relevant"
+      }
+    ],
+    "skills": [
+      {
+        "name": "python-testing",
+        "status": "still_relevant"
+      }
+    ],
+    "references": [
+      {
+        "name": "Carrier webhook docs",
+        "url": "https://docs.example-carrier.test/dispatch-relay/webhooks",
+        "status": "still_relevant"
+      },
+      {
+        "name": "SUP-2464",
+        "status": "done_with",
+        "note": "support complaint thread"
+      }
+    ]
+  },
+  "secret_values": [
+    "sk-fake-9cae311edb88f13dec833064"
+  ],
+  "meta": {
+    "seed": 7,
+    "task": "coding",
+    "length": 100,
+    "generator": "handover-v1",
+    "correction_old_index": 38,
+    "correction_new_index": 80,
+    "rename_index": 58,
+    "abandon_index": 38,
+    "next_step_index": 98,
+    "filler_indexes": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95,
+      96,
+      97
+    ]
+  }
+}

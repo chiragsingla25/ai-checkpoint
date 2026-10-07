@@ -1,0 +1,54 @@
+[
+  {
+    "id": "F-001",
+    "title": "Seeded scenario generator and committed handover dataset (2 task types x 3 lengths)",
+    "acceptance": [
+      "`checkpoint-eval generate --seed 7 --out /tmp/ds` writes exactly 6 scenario files, one per (task type in {coding, data_analysis}) x (length in {20, 50, 100}), named `coding-20.json` ... `data_analysis-100.json`, and needs no model, network or API key",
+      "Determinism: running it twice with `--seed 7` gives byte-identical files; `--seed 8` gives different message text for every file",
+      "Lengths: message counts fall within +/-10% of the target (18-22, 45-55, 90-110) and every message has role user or assistant",
+      "Every generated file loads with the existing `load_scenario` and runs with `checkpoint-eval run <file> --model fake --out <dir>` (exit 0); the two existing example scenarios still load and run unchanged",
+      "Each scenario has an `answer_key` with at least: 2 decisions each with a reason and a rejected alternative; verbatim items including an exact number, an exact shell command and a code snippet, each appearing byte-for-byte in the chat; 1 corrected value with `old` and `new` where `old` first appears in an earlier message than `new`; 1 `next_step`; and probes covering each (probe `kind` in fact|decision|verbatim|stale|next_step)",
+      "Each scenario has an `environment` manifest whose categories match the checkpoint workspace categories (files, repos with branch and last_commit, access, connectors, tools, env_vars by NAME, skills, references); every item has `status` still_relevant or done_with",
+      "Traps present and labelled (`trap` field) in every scenario: a folder used early then abandoned (done_with, not mentioned in the last 25% of messages); a file renamed mid-way (old path done_with, new path still_relevant, both paths appear in the chat); an env var whose fake secret-looking value (e.g. `sk-fake-...`) appears in a chat message, stored in `secret_values` and never as a manifest item's name or note",
+      "Placement is not fixed: across the 3 scenarios of one task type the message index of the correction differs, and across seeds 1-5 for `coding-50` the correction index takes at least 3 distinct values",
+      "Filler is varied: within any scenario no filler message text occurs more than once, and each 100-message scenario uses at least 20 distinct filler messages",
+      "Bad input fails cleanly: `--seed abc` exits 2 (argparse); an `--out` that is an existing regular file exits 1 with a message and writes nothing",
+      "The dataset is committed under `datasets/handover-v1/` with a README stating the seed and the generate command; a test regenerates with that seed and asserts byte-identical files",
+      "Old-format scenarios (no `kind`, `answer_key`, `environment`) still parse; new optional fields are validated with errors naming the field, e.g. probe `kind: \"foo\"` gives an error containing `probes[0].kind`"
+    ]
+  },
+  {
+    "id": "F-002",
+    "title": "Runner fixes (timeout + 1 retry, suite folders, no overwrite) and batched probes",
+    "acceptance": [
+      "`checkpoint-eval run --help` lists `--timeout` (seconds per model call, default 120) and `--force`; existing flags `--model`, `--model-name`, `--out` are unchanged",
+      "Timeout: every model call is bounded by `--timeout` and retried once on timeout or ModelError. With the fake model slowed by env `CHECKPOINT_EVAL_FAKE_DELAY=3` and `--timeout 1`, the run returns within 10 s (no hang), exits 1 or records the failure, and the message/results name `timeout` and 2 attempts",
+      "Single retry: with env `CHECKPOINT_EVAL_FAKE_FAIL_FIRST=1` (each distinct call fails once, then succeeds) the run exits 0 with results.json identical to a run without the env var; a call that fails twice is reported, not retried a third time (counted in a test)",
+      "No overwrite: re-running `run` into an `--out` that already holds results.json exits 1 with a message naming that file, leaving its bytes unchanged; with `--force` it is replaced. Running into a new or empty folder behaves as before",
+      "`checkpoint-eval suite datasets/handover-v1/*.json --model fake --out /tmp/s` writes /tmp/s/<scenario-name>/results.json, results.md and handover_*.md for each scenario and prints one table per scenario; it obeys the same overwrite rule per scenario folder; two inputs with the same scenario `name` exit 1 before any model call",
+      "Batched probes: per variant one answer call receives the handover plus all probe questions (and nothing else from the chat) and returns answers for all of them, and one judge call grades all answers. A counting FakeModel wrapper shows exactly 8 calls for a full scenario (1 compaction, 1 summary, 3 answer, 3 judge), regardless of probe count, for both example scenarios and a generated 100-message scenario",
+      "Each model call prints one progress line to stderr with the scenario name, the stage (compact|summarize|answer|judge), a counter like `[3/8]` and elapsed seconds; stdout still carries only the markdown table(s)",
+      "Compatibility: results.json keeps the same top-level keys and per-variant structure (`status`, `error`, `handover_chars`, `probes`, `aggregate`), with one entry per probe holding `question`, `answer`, `key_fact_recall`, `contradictions`, `facts`; scores remain per probe; the existing results/results.json still loads with the current reader",
+      "Bad batched replies do not crash: an answer reply that is not parseable or has the wrong number of answers marks those probes with `error` and null scores; a judge reply with the wrong count does the same; the variant and the run still finish and write results.json",
+      "Existing behaviour kept: `checkpoint-eval run examples/scenarios/invoice-sync.json --model fake --out /tmp/a` exits 0, prints the table and writes results.json, results.md, handover_*.md; two runs into different empty folders are byte-identical; the existing test suite passes (tests asserting the old one-call-per-probe pattern may be rewritten to assert the batched pattern, keeping the 'answer call sees only handover and questions' check)",
+      "`--model openai` honours `OPENAI_BASE_URL` (OpenRouter) and the timeout; verified with a stub `openai` module, no network"
+    ]
+  },
+  {
+    "id": "F-003",
+    "title": "Code-scored metrics and workspace capture scoring",
+    "acceptance": [
+      "Each variant's aggregate adds `verbatim_exact_match`, `stale_fact_use`, `next_step_accuracy` (all computed by code, no extra model call; call count stays 8 per scenario) alongside the existing key_fact_recall, contradictions and brief_tokens; results.md shows them as columns",
+      "Verbatim exact match is exact substring after trimming surrounding whitespace only: a unit test scores answer `run pytest -q -k sync` vs verbatim `pytest -q -k sync` as 1 and `pytest -k sync -q` as 0; a number `0.8732` vs `0.873` scores 0",
+      "Stale-fact use: an answer containing the corrected-away `old` value scores 1 (stale), one containing only the `new` value scores 0; a value that is a substring of a longer token (old `50` inside `500`) does not count",
+      "Next-step accuracy: share of next_step probes whose answer contains all of the answer key's next-step required terms; unit test with a hand-written answer gives the expected value",
+      "Old scenarios without kinds or answer_key report these three metrics as null and show `n/a`, never 0",
+      "For scenarios with an `environment` manifest results.json has a `workspace_capture` block computed from the compacted checkpoint's `workspace` section: capture_recall, capture_precision, status_accuracy, secret_leakage; scenarios without a manifest have no block and still run",
+      "Matching is by category plus normalised key (path or name; trailing slash and `~/` vs `$HOME` form normalised). A unit test with a manifest of 4 items and a workspace of 3 items, 2 matching, 1 of those with the right status, gives recall 0.50, precision 0.67, status_accuracy 0.50",
+      "secret_leakage counts occurrences of any `secret_values` string anywhere in the checkpoint JSON or rendered brief; a hand-built checkpoint with the secret in an env_vars entry scores 1 and results.md flags `LEAK`; the generated dataset run with FakeModel scores 0",
+      "FakeModel's compaction fills `workspace` heuristically from paths, repo/branch mentions and env var names in the transcript (never env values), so capture_recall on every generated scenario is > 0 and the checkpoint still validates with `Checkpoint.from_dict`",
+      "An empty or missing workspace gives recall 0, precision null (n/a), leakage 0, no error",
+      "End to end offline: `checkpoint-eval suite datasets/handover-v1/*.json --model fake --out /tmp/s` exits 0 with 6 results.json files each containing the new metrics and workspace_capture, total 48 model calls; product code (save/resume, MCP server, schema, brief) is unchanged (`git diff --stat` touches only src/ai_checkpoint/eval/, tests/, datasets/, docs and pyproject if needed)"
+    ]
+  }
+]
