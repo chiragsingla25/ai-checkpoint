@@ -12,6 +12,7 @@ from ..model import Checkpoint
 from ..schema import compaction_system_prompt
 from .models import (DEFAULT_TIMEOUT, TASK_ANSWER, TASK_JUDGE, TASK_SUMMARIZE, CallTimeout, Model,
                      ModelError, call_with_timeout)
+from .metrics import capture_scores, mean_or_none, score_probe
 from .scenario import Probe, Scenario
 
 VARIANTS = ("checkpoint", "summary", "full_history")
@@ -133,7 +134,7 @@ class Caller:
         raise CallFailed(f"{stage} call failed after 2 attempts: {last}") from None
 
 
-def _compaction_handover(scenario: Scenario, model: Model, caller: Optional[Caller] = None) -> str:
+def _compaction_handover(scenario: Scenario, model: Model, caller: Optional[Caller] = None):
     """Compaction call -> validate with the F-001 model -> render the F-002 brief."""
     prompt = (
         "Save a checkpoint of the conversation below. The conversation follows, to the end of "
@@ -146,7 +147,7 @@ def _compaction_handover(scenario: Scenario, model: Model, caller: Optional[Call
     except (ValueError, RecursionError) as e:
         raise ValidationError("compaction output", f"is not valid JSON ({e})") from None
     cp = Checkpoint.from_dict(data)  # ValidationError names the field
-    return render_brief(cp)
+    return render_brief(cp), cp
 
 
 def _call(caller: Optional[Caller], model: Model, stage: str, system: str, messages: List[dict], detail: str = "") -> str:
@@ -159,7 +160,8 @@ def build_handovers(scenario: Scenario, model: Model, caller: Optional[Caller] =
     """variant -> {"handover": text | None, "error": str | None}."""
     out: Dict[str, Dict[str, Any]] = {}
     try:
-        out["checkpoint"] = {"handover": _compaction_handover(scenario, model, caller), "error": None}
+        brief, cp = _compaction_handover(scenario, model, caller)
+        out["checkpoint"] = {"handover": brief, "error": None, "checkpoint": cp}
     except ValidationError as e:  # recorded, not fatal; model/API failures (ModelError) still abort
         out["checkpoint"] = {"handover": None, "error": str(e)}
     summary = _call(
@@ -178,7 +180,8 @@ def build_handovers(scenario: Scenario, model: Model, caller: Optional[Caller] =
 
 def _probe_entry(probe: Probe, answer: Optional[str], error: str) -> Dict[str, Any]:
     return {"question": probe.question, "answer": answer, "key_fact_recall": None, "contradictions": None,
-            "facts": [{"fact": f, "present": None} for f in probe.key_facts], "error": error}
+            "facts": [{"fact": f, "present": None} for f in probe.key_facts], "error": error,
+            "verbatim_exact_match": None, "stale_fact_use": None, "next_step_accuracy": None}
 
 
 def answer_probes(caller: Caller, handover: str, probes: List[Probe], detail: str = "") -> List[Any]:
@@ -258,6 +261,9 @@ def _aggregate(probes: List[dict], brief_tokens: Optional[int]) -> Dict[str, Any
     return {
         "key_fact_recall": (sum(p["key_fact_recall"] for p in scored) / len(scored)) if scored else None,
         "contradictions": sum(p["contradictions"] for p in scored) if scored else None,
+        "verbatim_exact_match": mean_or_none(p.get("verbatim_exact_match") for p in probes),
+        "stale_fact_use": mean_or_none(p.get("stale_fact_use") for p in probes),
+        "next_step_accuracy": mean_or_none(p.get("next_step_accuracy") for p in probes),
         "brief_tokens": brief_tokens,
         "probes_scored": len(scored),
         "probes_total": len(probes),
@@ -293,7 +299,8 @@ def run_scenario(scenario: Scenario, model: Model, timeout: Optional[float] = DE
             probes = []
             for i, (pr, a) in enumerate(zip(scenario.probes, answers)):
                 if isinstance(a, str):
-                    probes.append({"question": pr.question, "answer": a, **verdicts[i]})
+                    probes.append({"question": pr.question, "answer": a, **verdicts[i],
+                                   **score_probe(pr.kind, pr.target, scenario.answer_key, a)})
                 else:
                     probes.append(_probe_entry(pr, None, a[1]))
         except CallFailed as e:
@@ -303,7 +310,7 @@ def run_scenario(scenario: Scenario, model: Model, timeout: Optional[float] = DE
             "status": status, "error": error, "handover_chars": len(text),
             "probes": probes, "aggregate": _aggregate(probes, estimate_tokens(text)),
         }
-    return {
+    result = {
         "scenario": scenario.name,
         "description": scenario.description,
         "model": model.name,
@@ -312,3 +319,17 @@ def run_scenario(scenario: Scenario, model: Model, timeout: Optional[float] = DE
         "variants": variants,
         "_handovers": {k: v["handover"] for k, v in handovers.items()},
     }
+    if scenario.environment:
+        result["workspace_capture"] = _workspace_capture(scenario, handovers["checkpoint"])
+    return result
+
+
+def _workspace_capture(scenario: Scenario, ck: Dict[str, Any]) -> Dict[str, Any]:
+    """Stage-1 capture scoring from the compacted checkpoint (code only, no model call)."""
+    cp = ck.get("checkpoint")
+    if cp is None:
+        return {"status": "failed", "error": ck.get("error"), "capture_recall": None, "capture_precision": None,
+                "status_accuracy": None, "secret_leakage": None}
+    scores = capture_scores(scenario.environment or {}, cp.workspace, scenario.secret_values,
+                            [json.dumps(cp.to_dict(), ensure_ascii=False), ck["handover"] or ""])
+    return {"status": "ok", "error": None, **scores}

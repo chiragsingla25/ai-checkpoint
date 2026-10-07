@@ -22,3 +22,25 @@
 - Tests: `$HOME/aic-venv/bin/python -m pytest -q` -> 239 passed.
 - User-visible changes: stderr now shows one progress line per model call (`[name] answer (checkpoint) [3/8] 0.1s`); `run` refuses to overwrite an existing results.json without `--force`; answer/judge prompts changed (batched JSON arrays), so real-model results are not comparable with earlier per-probe runs; 8 calls per scenario instead of 2 + 6*probes; OpenAI client now uses `OPENAI_BASE_URL` explicitly and the timeout; failed variants now show `2 attempts` errors.
 - Notes: when an answer reply has the wrong count, all probes of that variant get the error and the judge call is skipped (so fewer than 8 calls in that case). Timed-out calls leave an abandoned daemon thread. Progress elapsed is time since scenario start. Counter total is fixed at 8 (stays lower if the checkpoint variant fails validation). F-003 metrics not touched.
+
+## F-003 attempt 1
+- What changed:
+  - src/ai_checkpoint/eval/metrics.py (new): code scores `verbatim_exact_match` (exact substring, surrounding whitespace trimmed only), `stale_fact_use` (old value as a whole token, not inside longer tokens or inside `new`), `next_step_correct` (all required terms, case-insensitive), `score_probe` (kind/target -> answer_key), and `capture_scores` (category + normalised key matching; `~` vs `$HOME`, trailing slash, `./`; recall, precision, status accuracy, secret leakage).
+  - src/ai_checkpoint/eval/pipeline.py: probes carry the three code scores (null when not applicable); aggregate adds `verbatim_exact_match`, `stale_fact_use`, `next_step_accuracy`; `workspace_capture` block added when the scenario has an environment manifest (scored from the validated checkpoint's workspace; leakage scans checkpoint JSON + rendered brief); no extra model calls (still 8).
+  - src/ai_checkpoint/eval/report.py: results.md has three new columns (n/a when null) and a workspace capture table, `LEAK (n)` when leakage > 0.
+  - src/ai_checkpoint/eval/models.py: FakeModel compaction fills `workspace` heuristically (paths, repo/branch/last commit, connectors, known tools, env var names only) and redacts `NAME=value` / `sk-...` before building the checkpoint.
+  - tests/test_metrics.py (new): 19 tests covering each F-003 criterion.
+- How to run it: `checkpoint-eval suite datasets/handover-v1/*.json --model fake --out DIR` (48 calls, 6 results.json with the new metrics and `workspace_capture`).
+- Tests: `$HOME/aic-venv/bin/python -m pytest -q` -> 258 passed. Fake dataset run: leakage 0 on all 6, capture recall 0.67-0.78.
+- User-visible changes: results.md gets 3 extra columns and, for scenarios with a manifest, a capture table; results.json gains per-probe and aggregate code-score keys and `workspace_capture`. Product code untouched (git diff only under src/ai_checkpoint/eval/ and tests/).
+- Notes: stale_fact_use and the other scores are computed over probes of the matching kind only. A failed checkpoint variant yields a `workspace_capture` block with status failed and null scores. References also match on url. Fake secret redaction is in FakeModel only (real models rely on the product schema, which already drops env values).
+
+## F-003 attempt 2
+- What changed:
+  - src/ai_checkpoint/eval/metrics.py: `secret_leakage` now counts DISTINCT secret values found in the checkpoint JSON, brief or workspace (one leaked secret = 1); `verbatim_exact_match` respects token boundaries where the verbatim text starts/ends with a letter or digit (`868` not in `8680`/`1868`, `0.873` not in `0.8732`; `868,` and `868.` still match).
+  - src/ai_checkpoint/eval/report.py: capture table labels leakage as distinct secrets measured before the product's save-time redaction.
+  - tests/test_metrics.py: boundary tests, exact leakage assertions (1 per secret, 2 for two), `test_product_code_unchanged` now checks only `git status` of src/ai_checkpoint outside eval/ (ignores delivery/ and other files).
+- How to run it: unchanged.
+- Tests: `$HOME/aic-venv/bin/python -m pytest -q` -> 259 passed.
+- User-visible changes: results.md leakage column header/caption text changed; verbatim scores can only drop where answers contained the value inside a longer token.
+- Notes: nothing else changed.

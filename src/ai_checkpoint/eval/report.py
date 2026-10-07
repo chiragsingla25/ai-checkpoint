@@ -21,16 +21,31 @@ def markdown_table(results: Dict[str, Any]) -> str:
         f"Scenario: {results['scenario']} | model: {results['model']} | "
         f"{results['messages']} messages, {results['probe_count']} probes",
         "",
-        "| variant | status | key-fact recall | contradictions | brief tokens |",
-        "|---|---|---|---|---|",
+        "| variant | status | key-fact recall | contradictions | verbatim exact | stale-fact use | next-step acc | brief tokens |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for name in VARIANTS:
         v = results["variants"][name]
         a = v["aggregate"]
         status = "ok" if v["status"] == "ok" else f"failed: {v['error']}".replace("|", "/").replace("\n", " ")
         lines.append(
-            f"| {name} | {status} | {_pct(a['key_fact_recall'])} | {_num(a['contradictions'])} | {_num(a['brief_tokens'])} |"
+            f"| {name} | {status} | {_pct(a['key_fact_recall'])} | {_num(a['contradictions'])} | "
+            f"{_pct(a.get('verbatim_exact_match'))} | {_pct(a.get('stale_fact_use'))} | "
+            f"{_pct(a.get('next_step_accuracy'))} | {_num(a['brief_tokens'])} |"
         )
+    wc = results.get("workspace_capture")
+    if wc:
+        leak = wc.get("secret_leakage")
+        flag = "n/a" if leak is None else ("LEAK (%d)" % leak if leak else "0")
+        lines += [
+            "",
+            "Workspace capture (checkpoint variant, scored by code against the manifest; secret leakage is measured on the model's checkpoint before the product's save-time redaction):",
+            "",
+            "| capture recall | capture precision | status accuracy | secret leakage (distinct secrets, before save-time redaction) |",
+            "|---|---|---|---|",
+            f"| {_pct(wc['capture_recall'])} | {_pct(wc['capture_precision'])} | "
+            f"{_pct(wc['status_accuracy'])} | {flag} |",
+        ]
     return "\n".join(lines) + "\n"
 
 

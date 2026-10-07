@@ -98,6 +98,14 @@ def _first(text: str, limit: int = 300) -> str:
     return (s[0] if s else text.strip())[:limit] or "(empty)"
 
 
+_SECRET_RE = re.compile(r"(\b[A-Z][A-Z0-9_]*=)[^\s`'\"]+|\bsk-[A-Za-z0-9][\w-]*")
+
+
+def _redact(text: str) -> str:
+    """Never carry secret-looking values (NAME=value, sk-...) into a checkpoint."""
+    return _SECRET_RE.sub(lambda m: (m.group(1) + "[redacted]") if m.group(1) else "[redacted]", text)
+
+
 _TRANSCRIPT_RE = re.compile(r"^=== (user|assistant) ===\n", re.M)
 
 
@@ -146,7 +154,7 @@ class FakeModel:
 
     # compaction: a lossy but schema-complete checkpoint built from the transcript
     def _compact(self, transcript: str) -> str:
-        msgs = parse_transcript(transcript)
+        msgs = [{"role": m["role"], "content": _redact(m["content"])} for m in parse_transcript(transcript)]
         users = [m["content"] for m in msgs if m["role"] == "user"]
         assts = [m["content"] for m in msgs if m["role"] == "assistant"]
         all_sents = [s for m in msgs for s in _sentences(re.sub(r"```.*?```", " ", m["content"], flags=re.S))]
@@ -182,9 +190,72 @@ class FakeModel:
             "verbatim": verbatim,
             "last_exchange": {"user": last_user, "assistant": assts[-1] if assts else ""},
             "notes_for_next_ai": "",
+            "workspace": self._workspace(msgs),
             "client": "eval",
         }
         return json.dumps(data, indent=1, ensure_ascii=False)
+
+    # workspace: paths, repo/branch, connectors, tools and env var NAMES found in the transcript
+    def _workspace(self, msgs: List[Message]) -> dict:
+        ws: Dict[str, list] = {c: [] for c in ("files", "repos", "access", "connectors", "tools", "env_vars", "skills", "references")}
+        n = len(msgs)
+        cut = int(n * 0.75)  # items last mentioned before this index count as finished
+        prose = [re.sub(r"https?://\S+", " ", re.sub(r"```.*?```", " ", m["content"], flags=re.S)) for m in msgs]
+        full = [re.sub(r"```.*?```", " ", m["content"], flags=re.S) for m in msgs]
+
+        def last_idx(tok: str) -> int:
+            return max((i for i, t in enumerate(full) if tok in t), default=-1)
+
+        def status(tok: str) -> str:
+            return "still_relevant" if last_idx(tok) >= cut else "done_with"
+
+        # repo + branch + last commit: first message that names a branch
+        repo_path = ""
+        for t in prose:
+            mb = re.search(r"\bbranch\s+`?([\w][\w./-]*)", t)
+            if not mb:
+                continue
+            sent = next((x for x in _sentences(t) if mb.group(0) in x), t)
+            mp = re.search(r"(~/[\w.\-/]*[\w\-])", sent)
+            if mp:
+                repo_path = mp.group(1)
+                item = {"path": repo_path, "branch": mb.group(1).rstrip(".,;"), "status": "still_relevant"}
+                mc = re.search(r"last commit(?: is)?\s+`?([0-9a-f]{7,40})\s+([^.\n]+)", t)
+                if mc:
+                    item["last_commit"] = f"{mc.group(1)} {mc.group(2).strip('` ')}"
+                ws["repos"].append(item)
+            break
+        branches = set(re.findall(r"\bbranch\s+`?([\w][\w./-]*)", " ".join(prose)))
+        text = " ".join(prose)
+        for b in branches:
+            text = text.replace(b, " ")
+        seen = set()
+        renamed_old = {m.group(1).rstrip(".,") for m in re.finditer(r"renamed\s+`?([\w.\-/~]+)`?\s+to\s+", text)}
+        for m in re.finditer(r"(?<![\w/:.~-])(~/[\w.\-/]*[\w\-/]|(?:[\w\-]+/)+[\w.\-]*[\w\-])", text):
+            path = m.group(1).rstrip("./,") if not m.group(1).endswith("/") else m.group(1)
+            path = path.rstrip(".,")
+            if path in seen or len(path) < 3:
+                continue
+            seen.add(path)
+            is_dir = path.endswith("/") or not re.search(r"\.\w+$", path)
+            st = "done_with" if path in renamed_old else status(path)
+            if path.startswith("~/"):
+                ws["access"].append({"path": path, "status": st})
+            elif re.search(r"\.\w+$", path) or path.endswith("/"):
+                ws["files"].append({"path": path, "status": st})
+        for name in re.findall(r"\b([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)\b", " ".join(full)):
+            if name not in {e["name"] for e in ws["env_vars"]}:
+                ws["env_vars"].append({"name": name, "status": status(name)})
+        for name in re.findall(r"\b([A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+)?) connector", " ".join(prose)):
+            name = re.sub(r"^(The|Our|Your|My)\s+", "", name)
+            if name not in {c["name"] for c in ws["connectors"]}:
+                ws["connectors"].append({"name": name, "status": status(name)})
+        low_all = " ".join(prose).lower()
+        for tool in ("pytest", "ruff", "ngrok", "pandas", "jupyter", "duckdb", "docker", "make", "git", "mypy", "black"):
+            if re.search(rf"\b{tool}\b", low_all):
+                idx = max((i for i, t in enumerate(full) if re.search(rf"\b{tool}\b", t.lower())), default=-1)
+                ws["tools"].append({"name": tool, "status": "still_relevant" if idx >= cut else "done_with"})
+        return {c: v for c, v in ws.items() if v}
 
     # free-form summary: intentionally short, as a default "summarise this chat" would be
     def _summarize(self, transcript: str) -> str:
