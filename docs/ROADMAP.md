@@ -5,11 +5,16 @@ Everything researched or designed so far that is **not** in the first build. Sou
 Order is a suggestion. Run the handover evaluation first: if checkpoints do not beat a plain summary, revisit the format before building more.
 
 ## 1. Online version for Claude.ai and ChatGPT on the web
-- Run the same MCP server over HTTPS (streamable HTTP transport) so web clients can add it as a custom connector. Web clients cannot reach a local process.
-- **GitHub storage backend:** write `checkpoints/cp-NNN.json` to the user's private repo as one commit per save via the GitHub API. Same layout as the local git store, behind the same storage interface.
-- Auth: GitHub OAuth per user, repo scoped to checkpoints only; never store tokens in checkpoint files (MVP section 27).
+Design agreed with Chirag (2026-10-07). Principle: **users own their data; we store nothing.**
+
+- **Why online storage is needed:** web clients (claude.ai, ChatGPT) run on the providers' servers and can only call an online MCP server over HTTPS, which cannot reach a folder on the user's computer.
+- **Pluggable storage behind the existing store interface:** local folder (today), **Google Drive (default for web)**, later OneDrive, and bring-your-own backends for advanced users (their own Supabase project or GitHub repo, credentials kept in their local config).
+- **Google Drive storage:** checkpoints as JSON files in the user's Drive, e.g. `AI Checkpoints/<chat>/cp-003 <name>.json`. Scope `drive.file` (the app only sees files it created). History = immutable checkpoints + Drive version history; git not needed. Sharing a checkpoint = sharing the Drive file.
+- **Sign-in, never pasted passwords:** local server does a one-time "Sign in with Google" browser flow and keeps the token in the OS keychain; the online server uses the MCP connector OAuth flow. Both read/write the same Drive folder, so save in Cursor and resume on claude.ai works.
+- **Online server is a stateless relay:** no database of chats; only sign-in tokens. Be honest in docs that a relay sees content in transit.
+- **Advanced options, same code:** (B) user's own computer exposed via Cloudflare Tunnel (works only while it is on); (C) self-host one-click deploy under the user's own cloud account.
+- **Rejected for now:** our own Supabase/database (we would be custodian of everyone's chats); GitHub as default storage (non-developers don't have repos; API rate limits). Built-in Drive connectors in claude.ai/ChatGPT: test whether they can write, but don't build on them (format and ids not enforced).
 - Check current plan requirements for custom connectors on Claude.ai and ChatGPT (developer mode for write tools) before building.
-- Zero-backend experiment first: GitHub's own remote MCP server + an instruction prompt that writes checkpoint JSON to a repo.
 
 ## 2. Raw transcript capture (MVP doc phases 1, 3)
 - **Claude Code:** read `~/.claude/projects/<slug>/<session>.jsonl` at save time and attach the exact raw history to the checkpoint. Find the current session by project folder + most recently modified file, confirmed by a quote of the last user message. Handle split assistant lines (shared `message.id`), `tool_use`/`tool_result`/`thinking` blocks, unknown line types. Redact API keys/tokens before writing.
