@@ -111,7 +111,8 @@ def test_examples_ship_and_are_valid():
 def test_offline_run_writes_results_and_table(path, tmp_path, capsys):
     out = tmp_path / "out"
     rc, stdout, err = _run_cli(["run", str(path), "--model", "fake", "--out", str(out)], capsys)
-    assert rc == 0 and err == ""
+    assert rc == 0
+    assert len(err.strip().splitlines()) == 8 and "[8/8]" in err  # one progress line per call, stderr only
     res = json.loads((out / "results.json").read_text())
     table = (out / "results.md").read_text()
     assert table in stdout
@@ -158,19 +159,22 @@ class Recorder(FakeModel):
         return super().complete(system, messages)
 
 
-def test_probe_answers_see_only_handover_and_question():
-    s = parse_scenario(good_scenario())
+def test_probe_answers_see_only_handover_and_questions():
+    sc = good_scenario()
+    sc["probes"].append({"question": "Which host?", "key_facts": ["localhost"]})
+    s = parse_scenario(sc)
     rec = Recorder()
     res = run_scenario(s, rec)
     answers = [c for c in rec.calls if c[0].startswith("TASK: ANSWER")]
-    assert len(answers) == 3  # 3 variants x 1 probe
+    assert len(answers) == 3  # 3 variants x ONE batched call, whatever the probe count
     for system, msgs in answers:
-        assert msgs == [{"role": "user", "content": "Which port?"}]
+        assert msgs == [{"role": "user", "content": json.dumps({"questions": ["Which port?", "Which host?"]})}]
     handovers = [c[0].split("HANDOVER:\n", 1)[1] for c in answers]
     assert handovers[0].startswith("You are continuing work from checkpoint")
     assert handovers[1].startswith("Summary of the previous chat")
     assert handovers[2].startswith("Full transcript") and render_transcript(s.messages) in handovers[2]
-    assert res["variants"]["full_history"]["aggregate"]["key_fact_recall"] == 1.0
+    assert res["variants"]["full_history"]["probes"][0]["key_fact_recall"] == 1.0
+    assert len(rec.calls) == 8
 
 
 def test_compaction_failure_is_recorded_not_raised():
@@ -305,7 +309,7 @@ def test_anthropic_adapter_with_stub_sdk(monkeypatch):
             seen.update(kw)
             return types.SimpleNamespace(content=[types.SimpleNamespace(text="hello "), types.SimpleNamespace(text="world")])
 
-    stub = types.SimpleNamespace(Anthropic=lambda api_key: types.SimpleNamespace(messages=Msgs(), key=api_key))
+    stub = types.SimpleNamespace(Anthropic=lambda api_key, **kw: types.SimpleNamespace(messages=Msgs(), key=api_key))
     monkeypatch.setitem(sys.modules, "anthropic", stub)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     m = make_model("anthropic")
@@ -322,7 +326,7 @@ def test_openai_adapter_with_stub_sdk_and_model_override(monkeypatch):
             seen.update(kw)
             return types.SimpleNamespace(choices=[types.SimpleNamespace(message=types.SimpleNamespace(content="ok"))])
 
-    stub = types.SimpleNamespace(OpenAI=lambda api_key: types.SimpleNamespace(chat=types.SimpleNamespace(completions=Comp())))
+    stub = types.SimpleNamespace(OpenAI=lambda api_key, **kw: types.SimpleNamespace(chat=types.SimpleNamespace(completions=Comp())))
     monkeypatch.setitem(sys.modules, "openai", stub)
     monkeypatch.setenv("OPENAI_API_KEY", "k")
     monkeypatch.setenv("CHECKPOINT_EVAL_OPENAI_MODEL", "env-model")
@@ -338,7 +342,7 @@ def test_api_failure_is_a_clean_model_error(monkeypatch):
         def create(self, **kw):
             raise RuntimeError("boom")
 
-    stub = types.SimpleNamespace(Anthropic=lambda api_key: types.SimpleNamespace(messages=Msgs()))
+    stub = types.SimpleNamespace(Anthropic=lambda api_key, **kw: types.SimpleNamespace(messages=Msgs()))
     monkeypatch.setitem(sys.modules, "anthropic", stub)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     with pytest.raises(ModelError, match="boom"):

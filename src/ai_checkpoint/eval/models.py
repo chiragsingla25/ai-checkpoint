@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
+import time
 from typing import Dict, List, Optional, Protocol
 
 from ..errors import CheckpointError
@@ -29,6 +31,39 @@ MODEL_CHOICES = ("fake", "anthropic", "openai")
 
 class ModelError(CheckpointError):
     """A model could not be used or a call to it failed."""
+
+
+class CallTimeout(ModelError):
+    """A model call did not return within the per-call timeout."""
+
+
+DEFAULT_TIMEOUT = 120.0
+
+
+def call_with_timeout(model, system: str, messages: List[Message], timeout: Optional[float]) -> str:
+    """Run ``model.complete`` so that a hung call cannot block forever.
+
+    The call runs in a daemon thread; if it has not returned after ``timeout`` seconds
+    CallTimeout is raised and the thread is abandoned. ``timeout`` of None or <= 0 means no guard.
+    """
+    if not timeout or timeout <= 0:
+        return model.complete(system, messages)
+    box: Dict[str, object] = {}
+
+    def run() -> None:
+        try:
+            box["result"] = model.complete(system, messages)
+        except BaseException as e:  # re-raised in the caller's thread
+            box["error"] = e
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join(timeout)
+    if t.is_alive():
+        raise CallTimeout(f"timeout: no reply within {timeout:g}s")
+    if "error" in box:
+        raise box["error"]  # type: ignore[misc]
+    return box["result"]  # type: ignore[return-value]
 
 
 class Model(Protocol):
@@ -85,6 +120,19 @@ class FakeModel:
     name = "fake"
 
     def complete(self, system: str, messages: List[Message]) -> str:
+        # offline fault injection for the runner's timeout/retry tests
+        delay = os.environ.get("CHECKPOINT_EVAL_FAKE_DELAY")
+        if delay:
+            try:
+                time.sleep(float(delay))
+            except ValueError:
+                pass
+        if os.environ.get("CHECKPOINT_EVAL_FAKE_FAIL_FIRST"):
+            seen = self.__dict__.setdefault("_failed_once", set())
+            key = json.dumps([system, messages], sort_keys=True)
+            if key not in seen:
+                seen.add(key)
+                raise ModelError("fake model: injected failure (CHECKPOINT_EVAL_FAKE_FAIL_FIRST)")
         user = messages[-1]["content"] if messages else ""
         if system.startswith(TASK_COMPACT):
             return self._compact(user)
@@ -148,7 +196,16 @@ class FakeModel:
         out = " ".join(_first(m["content"], 200) for m in picks)
         return ("Summary of the conversation so far: " + out)[:900]
 
-    def _answer(self, system: str, question: str) -> str:
+    def _answer(self, system: str, user: str) -> str:
+        """Batched: the user message is {"questions": [...]}; reply is a JSON array of answers."""
+        try:
+            d = json.loads(user)
+            questions = d["questions"]
+        except (ValueError, KeyError, TypeError):
+            return self._answer_one(system, user)
+        return json.dumps([self._answer_one(system, q) for q in questions], ensure_ascii=False)
+
+    def _answer_one(self, system: str, question: str) -> str:
         qt = set(_tokens(question))
         units = [u for u in _sentences(system.split("HANDOVER:", 1)[-1]) if len(u) > 3]
         scored = []
@@ -162,10 +219,16 @@ class FakeModel:
         return " ".join(u for _, _, u in scored[:4])
 
     def _judge(self, payload: str) -> str:
+        """Batched: payload is {"items": [...]}; reply is a JSON array, one verdict per item."""
         try:
             d = json.loads(payload)
         except ValueError:
             return json.dumps({"present": [], "contradictions": 0, "notes": "unparseable"})
+        if isinstance(d, dict) and isinstance(d.get("items"), list):
+            return json.dumps([json.loads(self._judge_one(it)) for it in d["items"]])
+        return self._judge_one(d)
+
+    def _judge_one(self, d) -> str:
         ans = norm(d.get("answer", ""))
         ans_tok = set(_tokens(d.get("answer", "")))
         present = []
@@ -201,10 +264,10 @@ def _import(module: str, extra: str):
 
 
 class AnthropicModel:
-    def __init__(self, model_name: str, api_key: str):
+    def __init__(self, model_name: str, api_key: str, timeout: float = DEFAULT_TIMEOUT):
         sdk = _import("anthropic", "anthropic")
         self.name = model_name
-        self._client = sdk.Anthropic(api_key=api_key)
+        self._client = sdk.Anthropic(api_key=api_key, timeout=timeout)
 
     def complete(self, system: str, messages: List[Message]) -> str:
         try:
@@ -217,10 +280,14 @@ class AnthropicModel:
 
 
 class OpenAIModel:
-    def __init__(self, model_name: str, api_key: str):
+    def __init__(self, model_name: str, api_key: str, timeout: float = DEFAULT_TIMEOUT):
         sdk = _import("openai", "openai")
         self.name = model_name
-        self._client = sdk.OpenAI(api_key=api_key)
+        kwargs = {"api_key": api_key, "timeout": timeout}
+        base_url = os.environ.get("OPENAI_BASE_URL")  # e.g. OpenRouter
+        if base_url:
+            kwargs["base_url"] = base_url
+        self._client = sdk.OpenAI(**kwargs)
 
     def complete(self, system: str, messages: List[Message]) -> str:
         try:
@@ -232,7 +299,7 @@ class OpenAIModel:
         return r.choices[0].message.content or ""
 
 
-def make_model(kind: str, model_name: Optional[str] = None) -> Model:
+def make_model(kind: str, model_name: Optional[str] = None, timeout: float = DEFAULT_TIMEOUT) -> Model:
     """Build a model. SDKs are imported here, only for the selected provider."""
     if kind == "fake":
         return FakeModel()
@@ -240,4 +307,4 @@ def make_model(kind: str, model_name: Optional[str] = None) -> Model:
         raise ModelError(f"unknown model {kind!r}; choose one of: {', '.join(MODEL_CHOICES)}")
     key = _require_key(kind)
     name = resolve_model_name(kind, model_name)
-    return (AnthropicModel if kind == "anthropic" else OpenAIModel)(name, key)
+    return (AnthropicModel if kind == "anthropic" else OpenAIModel)(name, key, timeout)
