@@ -1,0 +1,542 @@
+{
+  "scenario": "coding-20",
+  "dataset": "datasets/handover-v1",
+  "strict_next_step": false,
+  "variants": {
+    "checkpoint": {
+      "probes": [
+        {
+          "question": "What did we decide about remembering which webhook events were already processed, why, and which alternative did we reject?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What did we decide about stopping the carrier's timeouts and retries, why, and what did we rule out?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which option did we rule out for recording processed event ids, and what was the reason?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What exact replay tolerance (in seconds) did we set for the signature timestamp? Give the number.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the exact command I use to run the dedupe tests? Quote it exactly.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Quote exactly the SQL statement we settled on for recording a webhook event id.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "How many hours do we keep dedupe rows before the cleanup deletes them (the current value)?",
+          "kind": "stale",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": 0,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": 0,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the next step I planned to do when I come back?",
+          "kind": "next_step",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": 0
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": 1
+          }
+        },
+        {
+          "question": "What is the current file path of the webhook handler module?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which folder did we stop using, so it should not be accessed again?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which environment variables (names only) does the service depend on?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        }
+      ],
+      "aggregate": {
+        "old": {
+          "verbatim_exact_match": 1.0,
+          "stale_fact_use": 0.0,
+          "next_step_accuracy": 0.0
+        },
+        "new": {
+          "verbatim_exact_match": 1.0,
+          "stale_fact_use": 0.0,
+          "next_step_accuracy": 1.0
+        }
+      }
+    },
+    "summary": {
+      "probes": [
+        {
+          "question": "What did we decide about remembering which webhook events were already processed, why, and which alternative did we reject?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What did we decide about stopping the carrier's timeouts and retries, why, and what did we rule out?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which option did we rule out for recording processed event ids, and what was the reason?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What exact replay tolerance (in seconds) did we set for the signature timestamp? Give the number.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the exact command I use to run the dedupe tests? Quote it exactly.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Quote exactly the SQL statement we settled on for recording a webhook event id.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "How many hours do we keep dedupe rows before the cleanup deletes them (the current value)?",
+          "kind": "stale",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": 1,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": 0,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the next step I planned to do when I come back?",
+          "kind": "next_step",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": 0
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": 0
+          }
+        },
+        {
+          "question": "What is the current file path of the webhook handler module?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which folder did we stop using, so it should not be accessed again?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which environment variables (names only) does the service depend on?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        }
+      ],
+      "aggregate": {
+        "old": {
+          "verbatim_exact_match": 1.0,
+          "stale_fact_use": 1.0,
+          "next_step_accuracy": 0.0
+        },
+        "new": {
+          "verbatim_exact_match": 1.0,
+          "stale_fact_use": 0.0,
+          "next_step_accuracy": 0.0
+        }
+      }
+    },
+    "full_history": {
+      "probes": [
+        {
+          "question": "What did we decide about remembering which webhook events were already processed, why, and which alternative did we reject?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What did we decide about stopping the carrier's timeouts and retries, why, and what did we rule out?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which option did we rule out for recording processed event ids, and what was the reason?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What exact replay tolerance (in seconds) did we set for the signature timestamp? Give the number.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the exact command I use to run the dedupe tests? Quote it exactly.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Quote exactly the SQL statement we settled on for recording a webhook event id.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "How many hours do we keep dedupe rows before the cleanup deletes them (the current value)?",
+          "kind": "stale",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": 1,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": 0,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the next step I planned to do when I come back?",
+          "kind": "next_step",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": 1
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": 1
+          }
+        },
+        {
+          "question": "What is the current file path of the webhook handler module?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which folder did we stop using, so it should not be accessed again?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which environment variables (names only) does the service depend on?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        }
+      ],
+      "aggregate": {
+        "old": {
+          "verbatim_exact_match": 1.0,
+          "stale_fact_use": 1.0,
+          "next_step_accuracy": 1.0
+        },
+        "new": {
+          "verbatim_exact_match": 1.0,
+          "stale_fact_use": 0.0,
+          "next_step_accuracy": 1.0
+        }
+      }
+    }
+  },
+  "workspace_capture": {
+    "source": "handover_checkpoint.md ('Set up first' section)",
+    "old": {
+      "status": "ok",
+      "error": null,
+      "capture_recall": 0.5556,
+      "capture_precision": 0.5263,
+      "status_accuracy": 1.0,
+      "secret_leakage": 0,
+      "manifest_items": 18,
+      "workspace_items": 19,
+      "matched": 10
+    },
+    "new": {
+      "capture_recall": 0.6111,
+      "recall_still_relevant": 0.8462,
+      "recall_done_with": 0.0,
+      "capture_precision": 0.5556,
+      "status_accuracy": 1.0,
+      "secret_leakage": 0,
+      "manifest_items": 18,
+      "workspace_items": 18,
+      "matched": 11
+    }
+  }
+}

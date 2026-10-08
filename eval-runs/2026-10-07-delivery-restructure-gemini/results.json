@@ -1,0 +1,645 @@
+{
+  "scenario": "delivery-restructure",
+  "description": "Planning/analysis task: choose a delivery model under a budget, with computed figures, rejected options and reasons, a corrected data source, and a mid-way constraint change. Decisions and their reasons must survive the handover.",
+  "model": "google/gemini-3.8-flash-20260902",
+  "messages": 17,
+  "probe_count": 7,
+  "variants": {
+    "checkpoint": {
+      "status": "ok",
+      "error": null,
+      "handover_chars": 8591,
+      "probes": [
+        {
+          "question": "Which option was chosen and what are its main components?",
+          "answer": "We are currently paused with a finalized working outline for the 2-page board recommendation memo while awaiting your feedback from CFO Dana Whitfield regarding the presentation format of the downside scenario and any RouteWise setup fees. Once you confirm those points, I plan to draft the full board memo.\n\nBased on the handover, the chosen path is **Option C: The Hybrid Delivery Model**. Its main components are:\n\n* **CascadeLast Outsourcing (Zones 1 & 2):** Third-party carrier CascadeLast will handle long-distance delivery routes (Zones 1 and 2, accounting for 38% of total volume or 11,096 deliveries) at a contracted rate of $39.00 per delivery starting 6 January. This reduces delivery time on those routes to a 2-day window (replacing internal truck routes that cost $55.04 each).\n* **Internal Fleet Retention (Local Zones):** Harbor & Pine retains its 11 box trucks out of the Tacoma warehouse to handle local routes (62% of volume, or 18,104 deliveries), maintaining their efficient cost of $33.20 per delivery.\n* **RouteWise Routing Software:** Implementation of RouteWise routing software at $2,400/month ($28,800/year) on a 6-week implementation schedule to resolve local fleet scheduling bottlenecks and reduce the local 5-day delivery window.\n* **December Peak Stopgap Plan:** A temporary holiday peak solution using 6 temporary drivers ($25,200) and 4 rental vans ($4,400) totaling $29,600, funded outside the $480,000 restructuring budget (pre-approved by CFO Dana Whitfield up to $40,000) to cover the 3,900-delivery surge before CascadeLast goes live in January.\n\nTogether, the hybrid model delivers an estimated annual operational savings of $178,004 ($1,033,796 vs. the $1,211,800 status quo).\n\nPlease let me know if this aligns with your understanding, and share what Dana confirmed regarding the downside scenario format and any RouteWise implementation fees so we can proceed with drafting.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "hybrid",
+              "present": true
+            },
+            {
+              "fact": "CascadeLast",
+              "present": true
+            },
+            {
+              "fact": "zones 1 and 2",
+              "present": true
+            },
+            {
+              "fact": "$39.00",
+              "present": true
+            },
+            {
+              "fact": "RouteWise",
+              "present": true
+            },
+            {
+              "fact": "stopgap",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are accurately represented with no contradictions.",
+          "error": null
+        },
+        {
+          "question": "Why was the Portland warehouse option rejected, and what would its year-one cost have been?",
+          "answer": "I understand we are currently paused at the working outline stage of the two-page board recommendation memo while awaiting your feedback from CFO Dana Whitfield regarding the downside presentation format and any one-off RouteWise setup costs. Next, I plan to draft the full board recommendation memo following our agreed outline—please confirm or correct that direction before we move forward.\n\nRegarding your question about the Portland warehouse (Option A):\n\n### Year-One Cost\nThe projected Year 1 cost was **$418,000**, consisting of:\n* **$310,000** for lease and fit-out\n* **$108,000** for operational running costs ($9,000/month)\n\n### Reasons for Rejection\n1. **Budget Impact:** It would consume 87% of the approved $480,000 first-year restructuring budget, leaving a cushion of only $62,000.\n2. **Timeline:** It requires approximately 4 months to open, completely missing the critical December peak (3,900 deliveries).\n3. **Unit Economics:** It does not reduce per-delivery costs.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "$418,000",
+              "present": true
+            },
+            {
+              "fact": "not live",
+              "present": true
+            },
+            {
+              "fact": "December",
+              "present": true
+            },
+            {
+              "fact": "no per-delivery saving",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are accurately included with no contradictions.",
+          "error": null
+        },
+        {
+          "question": "Why was the full outsource option not chosen over the hybrid, and by how much does the hybrid beat it?",
+          "answer": "We are currently paused with an approved working outline of the board recommendation memo while waiting on feedback from CFO Dana Whitfield regarding the downside scenario format and any one-off RouteWise implementation fees; next, I plan to draft the full 2-page memo for board approval by 14 November. Please confirm or correct this before we proceed.\n\n***\n\nRegarding your question, the full outsource option (Option B, using CascadeLast for all deliveries at $36.00/delivery) was rejected in favor of the hybrid model (Option C) for three reasons:\n\n1. **Annual Cost Savings:** The hybrid model beats the full outsource option by **$17,404 per year**. \n   * **Hybrid annual cost:** $1,033,796 (saving $178,004 vs. status quo)\n   * **Full outsource annual cost:** $1,051,200 (saving $160,600 vs. status quo)\n2. **Delivery Speed:** The hybrid model achieves a **2-day delivery window** on long-distance routes (Zones 1 & 2), whereas the full outsource contract only guarantees a **3-day window**.\n3. **Preserving Internal Efficiency:** Full outsource would replace Harbor & Pine's internal local fleet routes, which already run at an efficient **$33.20 per delivery**, with the carrier's higher flat rate of $36.00 per delivery. The hybrid model keeps those 18,104 local deliveries in-house.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "$17,404",
+              "present": true
+            },
+            {
+              "fact": "3 day window",
+              "present": true
+            },
+            {
+              "fact": "local routes",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are accurately stated without contradictions.",
+          "error": null
+        },
+        {
+          "question": "What cost per delivery should the memo use for zones 1 and 2, and which figure must it not cite? Explain why.",
+          "answer": "I understand that we are currently paused at the working outline stage of the 2-page board recommendation memo while awaiting your follow-up with CFO Dana Whitfield regarding the presentation of the December downside scenario and any one-off RouteWise implementation fees. Next, I plan to draft the complete board memo based on the finalized outline once those details are confirmed—please confirm or correct this before we proceed.\n\nRegarding your question:\n\n* **Cost figure to use:** The memo must use the dispatch-derived cost of **$55.04** per delivery for internal trucks handling zones 1 and 2 (long-distance routes), or **$39.00** per delivery for the proposed carrier rate with CascadeLast.\n* **Figure it must not cite:** The memo must **not cite the finance team's 61% cost allocation figure**.\n* **Reason:** The 61% figure factored in overhead, fuel surcharges, and driver overtime allocations that conflicted mathematically with dispatch cost averages. The $55.04 figure reconciles accurately with dispatch unit economics ($41.50 overall average based on 62% local volume at $33.20 and 38% long-distance volume at $55.04).",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "$55.04",
+              "present": true
+            },
+            {
+              "fact": "61%",
+              "present": true
+            },
+            {
+              "fact": "dispatch",
+              "present": true
+            },
+            {
+              "fact": "do not cite",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are correctly stated without contradictions.",
+          "error": null
+        },
+        {
+          "question": "What contract terms from the carrier affect the plan, and how does the plan stay safe under them?",
+          "answer": "We are currently paused with an agreed working outline for the 2-page board memo, pending feedback from your conversation with CFO Dana Whitfield regarding the downside volume presentation format and any one-off RouteWise setup costs; once confirmed, the plan is to draft the complete memo. Please let me know if that aligns with where you'd like to pick up.\n\n***\n\n### Carrier Contract Terms and Plan Protections\n\nThe hybrid delivery model with CascadeLast is affected by three primary contract terms, and the plan stays safe under each as follows:\n\n#### 1. Annual Volume Commitment (9,000 deliveries)\n* **The Term:** CascadeLast requires an annual minimum commitment of 9,000 deliveries to secure the $39.00 per-delivery rate for Zones 1 & 2.\n* **How the Plan Stays Safe:**\n  * **Base Case:** Zones 1 & 2 represent 38% of Harbor & Pine's 29,200 annual volume, yielding **11,096 deliveries**, safely clearing the threshold by 2,096 deliveries.\n  * **Downside Scenario:** If December peak volume drops by 20% (from 3,900 to 3,120 orders, a loss of 780 deliveries total and ~296 in Zones 1 & 2), carrier volume would still be roughly **10,800 deliveries**—leaving a cushion of approximately 1,800 deliveries above the minimum.\n\n#### 2. Year 2 Price Escalation Clause (Up to 6%)\n* **The Term:** CascadeLast holds a contractual clause permitting a rate increase of up to 6% after the first 12 months.\n* **How the Plan Stays Safe:**\n  * If fully exercised, the rate increases from $39.00 to **$41.34** per delivery. \n  * This remains significantly lower than Harbor & Pine’s internal operating cost of **$55.04** per delivery on those long-distance routes, preserving strong structural cost savings into Year 2.\n\n#### 3. Start Date / Peak Availability (6 January start)\n* **The Term:** CascadeLast cannot begin service until 6 January, leaving the critical December holiday peak (3,900 deliveries) unassisted by the carrier.\n* **How the Plan Stays Safe:**\n  * The plan utilizes an approved December stopgap operational plan using 6 temporary drivers ($25,200) and 4 rental vans ($4,400) totaling **$29,600**.\n  * This is pre-approved by CFO Dana Whitfield under a separate peak budget (up to $40,000), leaving the core $480,000 restructuring budget intact.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "9,000",
+              "present": true
+            },
+            {
+              "fact": "11,096",
+              "present": true
+            },
+            {
+              "fact": "6%",
+              "present": true
+            },
+            {
+              "fact": "$41.34",
+              "present": true
+            },
+            {
+              "fact": "6 January",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are correctly and accurately stated in the response.",
+          "error": null
+        },
+        {
+          "question": "How is December covered, what does it cost and who approved the funding?",
+          "answer": "We are currently paused with a finalized working outline for the 2-page board recommendation memo while awaiting feedback from CFO Dana Whitfield regarding RouteWise setup fees and whether to present the December downside scenario as a table or narrative; next, I plan to draft the complete memo for board submission. Please confirm or correct this before we proceed.\n\nRegarding your question on December operations:\n\n* **How it is covered:** December peak volume (3,900 deliveries) is covered by an operational stopgap plan using **6 temporary drivers** and **4 rental vans**, as CascadeLast cannot begin service until 6 January.\n* **What it costs:** Exactly **$29,600** (6 temp drivers at $4,200 = $25,200, plus 4 rental vans at $1,100 = $4,400).\n* **Who approved the funding:** **CFO Dana Whitfield** pre-approved this funding up to $40,000, designated outside the core $480,000 first-year restructuring budget.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "6 temporary drivers",
+              "present": true
+            },
+            {
+              "fact": "4 vans",
+              "present": true
+            },
+            {
+              "fact": "$29,600",
+              "present": true
+            },
+            {
+              "fact": "$40,000",
+              "present": true
+            },
+            {
+              "fact": "Dana",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are correctly present with no contradictions.",
+          "error": null
+        },
+        {
+          "question": "What are the memo's format constraints and what is still open?",
+          "answer": "I understand we are currently paused at the working outline stage while you confer with CFO Dana Whitfield, and our next step is to resolve the remaining details and draft the full board recommendation memo. Please confirm or correct this before we proceed further.\n\n***\n\nPer the handover, here are the memo's format constraints and the open items:\n\n### Format Constraints\n* **Length:** Strictly maximum of 2 pages.\n* **Header / Addressing:** Addressed to the Board, from the Operations Lead.\n* **Deadline:** 14 November.\n* **Structure:** Adheres to the finalized 6-part outline:\n  1. Recommendation (3 lines)\n  2. Why now\n  3. Options considered (with one-line rejection reasons)\n  4. Numbers\n  5. Risks and mitigations\n  6. Ask and timeline\n* **Data / Content rules:**\n  * Must stay within the approved first-year restructuring budget of $480,000 (with the $29,600 December stopgap noted as pre-approved outside this budget).\n  * Do **not** cite the finance team's 61% cost allocation figure; use the dispatch-derived cost of $55.04 per long-distance delivery instead.\n\n### What is Still Open\n1. **Downside presentation format:** Whether CFO Dana Whitfield and the Board want the -20% December downside volume scenario presented as a dedicated comparison table or as concise narrative text.\n2. **RouteWise implementation costs:** Whether there are any one-time implementation, hardware, or onboarding fees for RouteWise on top of the recurring $2,400/month ($28,800/year) subscription.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "2 pages",
+              "present": true
+            },
+            {
+              "fact": "14 November",
+              "present": true
+            },
+            {
+              "fact": "downside",
+              "present": true
+            },
+            {
+              "fact": "table",
+              "present": true
+            },
+            {
+              "fact": "RouteWise",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are accurately covered with no contradictions.",
+          "error": null
+        }
+      ],
+      "aggregate": {
+        "key_fact_recall": 1.0,
+        "contradictions": 0,
+        "brief_tokens": 2148,
+        "probes_scored": 7,
+        "probes_total": 7
+      }
+    },
+    "summary": {
+      "status": "ok",
+      "error": null,
+      "handover_chars": 4318,
+      "probes": [
+        {
+          "question": "Which option was chosen and what are its main components?",
+          "answer": "The chosen approach is **Option C (Hybrid Model)**, complemented by **Option D (RouteWise Routing Software)** and a temporary **December Peak Stopgap Plan**.\n\nIts main components and details are:\n\n### 1. Carrier Outsource for Long-Distance Routes (CascadeLast)\n* **Scope:** CascadeLast handles long-distance deliveries (Zones 1 & 2), representing 38% of volume (11,096 orders/year).\n* **Delivery Window:** Reduced to 2 days.\n* **Pricing & Cost:** $39.00 per delivery, totaling **$432,744/year**.\n* **Contract Terms:** Minimum guarantee of 9,000 deliveries/year; maximum 6% rate increase after Year 1 (bringing the rate to $41.34, which is still below the current internal cost of $55.04).\n* **Timeline:** Carrier onboards starting **6 January**.\n\n### 2. Internal Fleet Retained for Local Routes\n* **Scope:** Harbor & Pine’s internal fleet continues servicing local routes, representing 62% of volume (18,104 orders/year).\n* **Cost:** Maintained at **$33.20 per delivery**, totaling **$601,052/year**.\n* **Combined Annual Cost & Savings:** Total annual delivery operating cost is **$1,033,796**, generating **$178,004 in annual operating savings** compared to the status quo ($1,211,800).\n\n### 3. Complementary Routing Software (Option D: RouteWise)\n* **Purpose:** Deployed to optimize internal local fleet routes and compress the current 5-day delivery window.\n* **Cost:** $2,400/month (**$28,800/year**), funded within the approved $480,000 restructuring budget.\n* **Timeline:** 6-week implementation.\n\n### 4. December Peak Stopgap Plan\nBecause CascadeLast cannot onboard until 6 January, a bridge plan is established for the December surge (3,900 orders):\n* **Resources:** 6 agency-hired temporary drivers ($4,200 each) and 4 rental vans ($1,100 each).\n* **Cost:** **$29,600**.\n* **Funding:** Pre-approved by CFO Dana Whitfield up to $40,000 and funded **outside** the $480,000 restructuring budget.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "hybrid",
+              "present": true
+            },
+            {
+              "fact": "CascadeLast",
+              "present": true
+            },
+            {
+              "fact": "zones 1 and 2",
+              "present": true
+            },
+            {
+              "fact": "$39.00",
+              "present": true
+            },
+            {
+              "fact": "RouteWise",
+              "present": true
+            },
+            {
+              "fact": "stopgap",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are accurately represented with no contradictions.",
+          "error": null
+        },
+        {
+          "question": "Why was the Portland warehouse option rejected, and what would its year-one cost have been?",
+          "answer": "Based on the handover, the **Portland warehouse option (Option A)** was rejected for the following reasons:\n\n* **High budget consumption:** Its Year 1 cost of $418,000 would consume 87% of the total approved $480,000 restructuring budget.\n* **Timing / Misses peak:** It requires 4 months to open, meaning it would not be ready in time for the critical December peak.\n* **No immediate return:** It yields no immediate per-delivery savings.\n\n### Year-One Cost Breakdown:\n* **Total Year 1 Cost:** **$418,000**\n  * **Fit-out and lease:** $310,000\n  * **Operating costs:** $108,000 ($9,000/month)",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "$418,000",
+              "present": true
+            },
+            {
+              "fact": "not live",
+              "present": true
+            },
+            {
+              "fact": "December",
+              "present": true
+            },
+            {
+              "fact": "no per-delivery saving",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are accurately represented without contradictions.",
+          "error": null
+        },
+        {
+          "question": "Why was the full outsource option not chosen over the hybrid, and by how much does the hybrid beat it?",
+          "answer": "Based on the handover, the full outsource option (Option B) was not chosen over the hybrid model (Option C) for two reasons:\n\n1. **Higher Cost:** The full outsource model costs $1,051,200 per year ($36.00/delivery across all 29,200 orders), whereas the hybrid model costs $1,033,796 per year.\n2. **Slower Delivery Window:** Full outsourcing offers a 3-day delivery window, whereas the hybrid model secures a faster 2-day window with CascadeLast for long-distance routes (Zones 1 & 2).\n\n**By how much the hybrid beats it:**\n* The hybrid option beats the full outsource option by **$17,404 per year** ($1,051,200 vs. $1,033,796).",
+          "key_fact_recall": 0.6666666666666666,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "$17,404",
+              "present": true
+            },
+            {
+              "fact": "3 day window",
+              "present": true
+            },
+            {
+              "fact": "local routes",
+              "present": false
+            }
+          ],
+          "judge_notes": "The answer mentions the cost difference and the 3-day window, but omits the point about giving up cheap local routes.",
+          "error": null
+        },
+        {
+          "question": "What cost per delivery should the memo use for zones 1 and 2, and which figure must it not cite? Explain why.",
+          "answer": "Based on the handover:\n\n* **Cost per delivery to use:** \n  * The current internal cost to use for Zones 1 & 2 is **$55.04 per delivery** (based on dispatch data). \n  * *(Note: Under the proposed hybrid model with CascadeLast, the new rate for Zones 1 & 2 will be **$39.00 per delivery**).*\n\n* **Figure that must not be cited:** \n  * The memo must not cite the **finance allocation figure of 61%**.\n\n* **Why:** \n  * The analysis relies on actual **dispatch data**, which establishes that Zones 1 & 2 account for **38% of volume** (11,096 orders) at an internal cost of $55.04 per delivery, rather than using the finance allocation percentage. (The handover explicitly instructs: *\"Do not use the finance allocation figure of 61% in the memo,\"* but does not provide any additional background beyond specifying that dispatch data is the correct operational source).",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "$55.04",
+              "present": true
+            },
+            {
+              "fact": "61%",
+              "present": true
+            },
+            {
+              "fact": "dispatch",
+              "present": true
+            },
+            {
+              "fact": "do not cite",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are accurately stated with no contradictions.",
+          "error": null
+        },
+        {
+          "question": "What contract terms from the carrier affect the plan, and how does the plan stay safe under them?",
+          "answer": "Based on the handover, there are three specific contract terms from the carrier (**CascadeLast**) that affect the plan, along with the safeguards in place for each:\n\n---\n\n### 1. Minimum Volume Commitment (9,000 deliveries/year)\n* **The Term:** CascadeLast requires an annual minimum commitment of **9,000 deliveries**.\n* **How the Plan Stays Safe:** \n  * The baseline volume allocated to CascadeLast for Zones 1 & 2 is **11,096 deliveries/year** (38% of total volume), providing a buffer of 2,096 deliveries.\n  * **Downside Scenario Protection:** Even under a tested downside scenario where December volume drops by 20% (reducing carrier volume across the year to ~10,800 orders), volume remains comfortably above the 9,000-delivery threshold.\n\n---\n\n### 2. Year 2 Rate Escalation (Up to 6% increase)\n* **The Term:** The contract allows up to a **6% rate increase after Year 1** (raising the per-delivery rate from $39.00 to **$41.34**).\n* **How the Plan Stays Safe:** \n  * Even with the full 6% increase to $41.34, the rate remains significantly lower than Harbor & Pine’s current internal cost to service Zones 1 & 2 (**$55.04 per delivery**), preserving long-term operating cost savings.\n\n---\n\n### 3. Onboarding Availability Date (6 January)\n* **The Term:** CascadeLast cannot onboard until **6 January**, meaning they cannot cover the December peak surge (3,900 deliveries).\n* **How the Plan Stays Safe:** \n  * **December Peak Stopgap:** A separate stopgap plan covers the December gap before carrier onboarding begins. It uses 6 temporary agency drivers ($4,200 each) and 4 rental vans ($1,100 each) at a total cost of **$29,600**. \n  * **Funding Protection:** This stopgap is pre-approved by CFO Dana Whitfield up to $40,000 and funded outside of the primary $480,000 restructuring budget.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "9,000",
+              "present": true
+            },
+            {
+              "fact": "11,096",
+              "present": true
+            },
+            {
+              "fact": "6%",
+              "present": true
+            },
+            {
+              "fact": "$41.34",
+              "present": true
+            },
+            {
+              "fact": "6 January",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are correctly included without contradictions.",
+          "error": null
+        },
+        {
+          "question": "How is December covered, what does it cost and who approved the funding?",
+          "answer": "Based on the handover, here are the details for the December peak coverage:\n\n* **How it is covered:** Through a temporary stopgap plan consisting of:\n  * Agency hire of **6 temporary drivers** ($4,200 each)\n  * **4 rental vans** ($1,100 each)\n* **What it costs:** Exactly **$29,600** ($25,200 for drivers + $4,400 for vans).\n* **Who approved the funding:** CFO **Dana Whitfield** pre-approved the funding (up to $40,000), funded **outside** the $480,000 project restructuring budget.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "6 temporary drivers",
+              "present": true
+            },
+            {
+              "fact": "4 vans",
+              "present": true
+            },
+            {
+              "fact": "$29,600",
+              "present": true
+            },
+            {
+              "fact": "$40,000",
+              "present": true
+            },
+            {
+              "fact": "Dana",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are correctly and accurately stated.",
+          "error": null
+        },
+        {
+          "question": "What are the memo's format constraints and what is still open?",
+          "answer": "Based on the handover, here are the format constraints and the open items for the memo:\n\n### Memo Format Constraints\n* **Length:** Maximum of 2 pages.\n* **Recipient & Sender:** Must be addressed **to the Board** from the **Operations Lead**.\n* **Deadline:** Final memo due by **14 November**.\n* **Content Constraints:**\n  * Must reflect that purchasing new trucks has already been ruled out by the Board.\n  * Must **not** use the finance allocation figure of 61% for long-distance deliveries (use the dispatch data figures: Zones 1 & 2 account for 38% of volume at $55.04/delivery).\n\n---\n\n### Open Items to Confirm\n1. **Downside Scenario Presentation:** Whether the downside scenario (a 20% December drop) should be displayed as a standalone table or integrated directly into the text.\n2. **RouteWise Implementation Costs:** Whether there are any one-time implementation or setup fees for RouteWise beyond the $2,400/month ($28,800/year) subscription cost.\n3. **Drafting Approval:** Confirmation to proceed with drafting the complete 2-page board memo following the 6-section structure.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "2 pages",
+              "present": true
+            },
+            {
+              "fact": "14 November",
+              "present": true
+            },
+            {
+              "fact": "downside",
+              "present": true
+            },
+            {
+              "fact": "table",
+              "present": true
+            },
+            {
+              "fact": "RouteWise",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are accurately represented without any contradictions.",
+          "error": null
+        }
+      ],
+      "aggregate": {
+        "key_fact_recall": 0.9523809523809523,
+        "contradictions": 0,
+        "brief_tokens": 1080,
+        "probes_scored": 7,
+        "probes_total": 7
+      }
+    },
+    "full_history": {
+      "status": "ok",
+      "error": null,
+      "handover_chars": 10786,
+      "probes": [
+        {
+          "question": "Which option was chosen and what are its main components?",
+          "answer": "The chosen option is the **hybrid delivery model**, complemented by routing software and a December stopgap plan. \n\nIts main components are:\n\n1. **Third-Party Carrier (CascadeLast) for Long-Distance Routes (Zones 1 and 2):**\n   * **Scope:** Handles zones 1 and 2, which represent 38% of order volume (11,096 deliveries per year).\n   * **Cost & Service:** $39.00 per delivery (totaling $432,744 annually) with a 2-day delivery window guarantee.\n   * **Start Date:** Begins 6 January (due to the carrier's peak season).\n   * **Contract Terms:** Requires a minimum commitment of 9,000 deliveries per year and includes a clause allowing up to a 6% rate increase after the first 12 months (to $41.34 per delivery).\n\n2. **Internal Fleet for Local Routes:**\n   * **Scope:** Harbor & Pine retains its existing truck fleet out of the Tacoma warehouse to handle the local routes, representing 62% of order volume (18,104 deliveries per year).\n   * **Cost:** Operated at approximately $33.20 per delivery (totaling $601,052 annually).\n\n3. **Routing Software Complement (RouteWise):**\n   * **Purpose:** Implemented to improve truck scheduling and reduce the local 5-day delivery window.\n   * **Cost & Implementation:** $2,400 per month ($28,800 per year) with a 6-week implementation timeline, funded within the $480,000 approved budget.\n\n4. **December Stopgap Plan:**\n   * **Purpose:** Covers the December holiday peak (projected at 3,900 orders) since CascadeLast cannot start until 6 January.\n   * **Resources:** Hiring 6 temporary drivers through an agency at $4,200 per driver for the month ($25,200) and renting 4 vans at $1,100 each for the month ($4,400).\n   * **Cost:** $29,600 total, funded outside the $480,000 budget under a separate pre-approval of up to $40,000 from the CFO.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "hybrid",
+              "present": true
+            },
+            {
+              "fact": "CascadeLast",
+              "present": true
+            },
+            {
+              "fact": "zones 1 and 2",
+              "present": true
+            },
+            {
+              "fact": "$39.00",
+              "present": true
+            },
+            {
+              "fact": "RouteWise",
+              "present": true
+            },
+            {
+              "fact": "stopgap",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are accurately represented with no contradictions.",
+          "error": null
+        },
+        {
+          "question": "Why was the Portland warehouse option rejected, and what would its year-one cost have been?",
+          "answer": "Based on the handover, the **year-one cost** of the Portland warehouse option would have been **$418,000**. This consists of:\n* **$310,000** for the fit-out, lease deposit, and first-year lease.\n* **$108,000** in first-year operating costs ($9,000 per month × 12 months).\n\nThe Portland warehouse option was rejected for three primary reasons:\n1. **High budget consumption:** At $418,000, it would use 87.1% of the approved $480,000 first-year budget, leaving only $62,000 for anything else.\n2. **Timing:** It would take approximately 4 months to open, meaning it would not be ready or operational in time for the December holiday peak.\n3. **Lack of operational savings:** On its own, it does not reduce the cost per delivery.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "$418,000",
+              "present": true
+            },
+            {
+              "fact": "not live",
+              "present": true
+            },
+            {
+              "fact": "December",
+              "present": true
+            },
+            {
+              "fact": "no per-delivery saving",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are accurately represented without any contradictions.",
+          "error": null
+        },
+        {
+          "question": "Why was the full outsource option not chosen over the hybrid, and by how much does the hybrid beat it?",
+          "answer": "Based on the handover, the full outsource option was rejected in favor of the hybrid model for the following reasons:\n\n1. **Lower Annual Cost:** The hybrid model beats the full outsource by **$17,404 per year**.\n   * **Full outsource:** 29,200 deliveries at $36.00 = **$1,051,200/year** (saving $160,600 vs. status quo).\n   * **Hybrid:** 11,096 long-distance deliveries at $39.00 ($432,744) + 18,104 local deliveries at $33.20 ($601,052) = **$1,033,796/year** (saving $178,004 vs. status quo).\n2. **Preserving Cheap Local Routes:** The full outsource rate of $36.00 would replace Harbor & Pine’s own local deliveries, which the internal fleet already runs at **$33.20 per delivery**.\n3. **Better Delivery Windows on Distant Routes:** The full outsource guarantees a **3-day window**, whereas the hybrid secures a faster **2-day window** with the carrier for zones 1 and 2, which are the long-distance routes where customers currently wait the longest.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "$17,404",
+              "present": true
+            },
+            {
+              "fact": "3 day window",
+              "present": true
+            },
+            {
+              "fact": "local routes",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are correctly stated with no contradictions.",
+          "error": null
+        },
+        {
+          "question": "What cost per delivery should the memo use for zones 1 and 2, and which figure must it not cite? Explain why.",
+          "answer": "Based on the handover:\n\n* **Cost per delivery to use for zones 1 and 2:** **$55.04** per delivery.\n* **Figure it must not cite:** The **61%** figure (which was the finance team's allocation of delivery costs attributed to zones 1 and 2).\n\n**Why:**\nThe two numbers were inconsistent. When calculated from the dispatch system's overall average cost ($41.50 per delivery) and local truck costs ($33.20 for 62% of volume), zones 1 and 2 (38% of volume) work out to $55.04 per delivery. That yields an actual cost share of 50.4%, not 61%. \n\nThe user explained that the 61% figure came from the finance team’s allocation, which added fuel surcharges and driver overtime to those routes, whereas the $41.50 average was the plain cost per delivery from the dispatch system. Because the operations lead trusts the dispatch-based data for operational decisions, they instructed that the memo use the dispatch-derived **$55.04** and exclude the **61%** figure entirely.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "$55.04",
+              "present": true
+            },
+            {
+              "fact": "61%",
+              "present": true
+            },
+            {
+              "fact": "dispatch",
+              "present": true
+            },
+            {
+              "fact": "do not cite",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are accurately represented with no contradictions.",
+          "error": null
+        },
+        {
+          "question": "What contract terms from the carrier affect the plan, and how does the plan stay safe under them?",
+          "answer": "Based on the handover, three specific contract terms from CascadeLast affect the plan, along with the mitigations that keep the plan safe:\n\n---\n\n### 1. Minimum Commitment of 9,000 Deliveries per Year\n* **The Term:** CascadeLast requires a minimum annual volume commitment of 9,000 deliveries to qualify for the $39.00 overflow rate.\n* **How the Plan Stays Safe:**\n  * **Base Plan:** Zones 1 and 2 represent 38% of total annual volume (11,096 deliveries out of 29,200). This provides a safe buffer of 2,096 deliveries above the 9,000 minimum.\n  * **Downside Scenario:** If December volume drops by 20% (from 3,900 to 3,120 deliveries, a reduction of 780 total deliveries), the 38% share for zones 1 and 2 drops by approximately 296 deliveries. That leaves roughly 10,800 long-distance deliveries—still comfortably exceeding the 9,000 minimum commitment.\n\n---\n\n### 2. Price Increase of up to 6% After the First 12 Months\n* **The Term:** CascadeLast has a clause permitting them to raise the per-delivery rate by up to 6% after the first year.\n* **How the Plan Stays Safe:**\n  * A 6% increase raises the per-delivery rate from $39.00 to **$41.34**.\n  * Even at $41.34, the carrier rate remains far below Harbor & Pine's internal long-distance delivery cost of **$55.04**.\n  * At year two rates, 11,096 deliveries would cost **$458,709** ($41.34 × 11,096), compared to the **$610,708** ($55.04 × 11,096) currently paid for those routes, maintaining a substantial cost savings margin.\n\n---\n\n### 3. Start Date of 6 January (Unavailable for the December Peak)\n* **The Term:** Due to their own peak season, CascadeLast cannot start service until 6 January, meaning the hybrid model cannot cover the December volume surge (3,900 orders).\n* **How the Plan Stays Safe:**\n  * **December Stopgap:** The company will hire 6 temporary agency drivers at $4,200 each ($25,200) and rent 4 vans at $1,100 each ($4,400) for December.\n  * This stopgap costs **$29,600**, which is fully covered by CFO Dana Whitfield’s pre-approved **$40,000** stopgap budget (funded separately outside the main $480,000 budget), leaving $10,400 to spare.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "9,000",
+              "present": true
+            },
+            {
+              "fact": "11,096",
+              "present": true
+            },
+            {
+              "fact": "6%",
+              "present": true
+            },
+            {
+              "fact": "$41.34",
+              "present": true
+            },
+            {
+              "fact": "6 January",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are correctly and accurately stated without any contradictions.",
+          "error": null
+        },
+        {
+          "question": "How is December covered, what does it cost and who approved the funding?",
+          "answer": "Based on the handover, here are the details for covering December:\n\n* **How it is covered:** Through a short-term stopgap measure consisting of:\n  * Hiring 6 temporary drivers for the month through an agency (at $4,200 per driver).\n  * Renting 4 vans for the month (at $1,100 per van).\n* **What it costs:** Exactly **$29,600** ($25,200 for drivers + $4,400 for vans).\n* **Who approved the funding:** **Dana Whitfield** (the CFO), who pre-approved up to $40,000 specifically for this stopgap, funded outside the primary $480,000 budget.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "6 temporary drivers",
+              "present": true
+            },
+            {
+              "fact": "4 vans",
+              "present": true
+            },
+            {
+              "fact": "$29,600",
+              "present": true
+            },
+            {
+              "fact": "$40,000",
+              "present": true
+            },
+            {
+              "fact": "Dana",
+              "present": true
+            }
+          ],
+          "judge_notes": "All key facts are correctly and accurately stated with no contradictions.",
+          "error": null
+        },
+        {
+          "question": "What are the memo's format constraints and what is still open?",
+          "answer": "Based on the handover, here are the format constraints and the open items for the recommendation memo:\n\n### Format Constraints\n* **Audience:** Addressed to the Board.\n* **Author:** From the Operations Lead.\n* **Length:** No longer than 2 pages (maximum 2 pages).\n* **Required Content & Data Rules:**\n  * Must include the downside scenario where December volume is 20% below plan.\n  * Must cite the dispatch-derived cost of **$55.04** per delivery for long-distance routes (Zones 1 and 2).\n  * Must **not** include or cite the finance team's **61%** cost allocation figure.\n\n---\n\n### Open Items\n1. **Downside presentation format:** Whether the 20% December downside scenario should be displayed as a table or summarized in a single sentence (the Operations Lead preferred a table, but needed to verify with CFO Dana Whitfield).\n2. **Software implementation costs:** The exact first-year budget line/cost for implementing RouteWise beyond the $2,400 monthly ($28,800/year) subscription fee.",
+          "key_fact_recall": 0.8,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "2 pages",
+              "present": true
+            },
+            {
+              "fact": "14 November",
+              "present": false
+            },
+            {
+              "fact": "downside",
+              "present": true
+            },
+            {
+              "fact": "table",
+              "present": true
+            },
+            {
+              "fact": "RouteWise",
+              "present": true
+            }
+          ],
+          "judge_notes": "The answer misses the due date of 14 November.",
+          "error": null
+        }
+      ],
+      "aggregate": {
+        "key_fact_recall": 0.9714285714285714,
+        "contradictions": 0,
+        "brief_tokens": 2697,
+        "probes_scored": 7,
+        "probes_total": 7
+      }
+    }
+  }
+}

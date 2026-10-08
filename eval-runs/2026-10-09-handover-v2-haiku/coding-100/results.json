@@ -1,0 +1,706 @@
+{
+  "scenario": "coding-100",
+  "description": "Coding task: stop a Flask webhook service from sending duplicate customer texts. Two decisions with reasons and rejected options, a number, a command and a SQL statement to reproduce verbatim, a corrected retention value, a renamed module, an abandoned scratch folder and a fake secret pasted into the chat.",
+  "model": "anthropic/claude-haiku-5.5",
+  "messages": 100,
+  "probe_count": 11,
+  "variants": {
+    "checkpoint": {
+      "status": "ok",
+      "error": null,
+      "handover_chars": 14192,
+      "probes": [
+        {
+          "question": "What did we decide about remembering which webhook events were already processed, why, and which alternative did we reject?",
+          "answer": "Decision: record each event_id in a Postgres table, webhook_events, with a unique constraint on event_id, and use INSERT ... ON CONFLICT (event_id) DO NOTHING, checking cur.rowcount (1 = new, process it; 0 = duplicate, skip). Reason: no Redis is available and none will be provisioned before next quarter, the app already uses Postgres, and the insert is atomic so two workers cannot both win. Rejected: Redis SETNX with an expiry (ruled out because there is no Redis) and an in-memory set of seen event_ids (lost on restart and not shared between workers, so duplicates would still get through).",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "Record each event_id in a Postgres table webhook_events with a unique constraint",
+              "present": true
+            },
+            {
+              "fact": "there is no Redis available and the platform team will not provision one before next quarter",
+              "present": true
+            },
+            {
+              "fact": "Redis SETNX with an expiry",
+              "present": true
+            }
+          ],
+          "judge_notes": "Covers the Postgres decision, the no-Redis constraint, and the rejected Redis SETNX; the in-memory alternative is extra but not contradictory.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "What did we decide about stopping the carrier's timeouts and retries, why, and what did we rule out?",
+          "answer": "Decision: do not send the SMS inside the request. Verify the signature, record the event_id, submit notify_customer to a module-level ThreadPoolExecutor(max_workers=8), and return 202 immediately; duplicates return 200 without notifying. Reason: the synchronous SMS call is slow, which makes the carrier time out and retry. Ruled out: Celery in front of the handler, because it needs a broker and no new infrastructure is allowed. The handover does not say retries stop; the carrier docs say retries continue for up to 48 hours.",
+          "key_fact_recall": 0.6666666666666666,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "Send the notification from a ThreadPoolExecutor(max_workers=8) and return 202 immediately",
+              "present": true
+            },
+            {
+              "fact": "the carrier retries when the response takes too long, and a thread pool needs no new infrastructure",
+              "present": false
+            },
+            {
+              "fact": "Celery",
+              "present": true
+            }
+          ],
+          "judge_notes": "The thread pool and 202 are stated and Celery is ruled out, but the answer never says the thread pool needs no new infrastructure. The carrier-retry point is present.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "Which option did we rule out for recording processed event ids, and what was the reason?",
+          "answer": "Redis SETNX with an expiry was ruled out. The reason is that no Redis is available and the platform team will not provision one before next quarter. (The in-memory set of event_ids was also rejected, because it is lost on restart and not shared between workers.)",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "Redis SETNX with an expiry",
+              "present": true
+            },
+            {
+              "fact": "there is no Redis available and the platform team will not provision one before next quarter",
+              "present": true
+            }
+          ],
+          "judge_notes": "Rejection of Redis SETNX and the no-Redis reason are both stated correctly; the known-wrong claim that Redis is in use is not made.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "What exact replay tolerance (in seconds) did we set for the signature timestamp? Give the number.",
+          "answer": "324 seconds. Webhooks whose timestamp is more than 324 seconds old are rejected.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "324",
+              "present": true
+            }
+          ],
+          "judge_notes": "States 324 seconds as the replay tolerance.",
+          "error": null,
+          "verbatim_exact_match": 1,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "What is the exact command I use to run the dedupe tests? Quote it exactly.",
+          "answer": "pytest -q tests/test_webhooks.py -k dedupe",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "pytest -q tests/test_webhooks.py -k dedupe",
+              "present": true
+            }
+          ],
+          "judge_notes": "Quotes the pytest command exactly.",
+          "error": null,
+          "verbatim_exact_match": 1,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "Quote exactly the SQL statement we settled on for recording a webhook event id.",
+          "answer": "INSERT INTO webhook_events (event_id, received_at) VALUES (%s, now()) ON CONFLICT (event_id) DO NOTHING;",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "INSERT INTO webhook_events (event_id, received_at) VALUES (%s, now()) ON CONFLICT (event_id) DO NOTHING;",
+              "present": true
+            }
+          ],
+          "judge_notes": "Quotes the INSERT statement exactly.",
+          "error": null,
+          "verbatim_exact_match": 1,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "How many hours do we keep dedupe rows before the cleanup deletes them (the current value)?",
+          "answer": "48 hours. The current cleanup is DELETE FROM webhook_events WHERE received_at < now() - interval '48 hours';. The earlier 24-hour value is superseded.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "48 hours",
+              "present": true
+            }
+          ],
+          "judge_notes": "States 48 hours and treats 24 hours only as the superseded earlier value, not the current one.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": 0,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "What is the next step I planned to do when I come back?",
+          "answer": "Check whether migrations/0029_add_event_dedupe.sql already exists (the number may need adjusting, and it was not verified). Then create it with the webhook_events table, using event_id as the unique key and received_at as a UTC timestamp, and apply it on staging. After that, add the replay test that delivers the same event twice. The handover does not confirm that any of this has been written yet.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "Write migrations/0029_add_event_dedupe.sql (webhook_events table with a unique event_id), apply it on staging, then add the replay test that delivers the same event twice",
+              "present": true
+            }
+          ],
+          "judge_notes": "Restates the planned migration, staging apply, and replay test, with hedging about whether the file already exists.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": 1
+        },
+        {
+          "question": "What is the current file path of the webhook handler module?",
+          "answer": "app/webhooks.py. It was renamed from app/handlers.py, and app/__init__.py was updated to match.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "app/webhooks.py",
+              "present": true
+            }
+          ],
+          "judge_notes": "Gives app/webhooks.py correctly; the rename history is unsupported by the reference but does not contradict it.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "Which folder did we stop using, so it should not be accessed again?",
+          "answer": "~/scratch/dispatch-relay-carrier-samples/. The user is done with it and it should not be accessed again. The useful payloads were copied into tests/fixtures/.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "~/scratch/dispatch-relay-carrier-samples/",
+              "present": true
+            }
+          ],
+          "judge_notes": "Gives the folder path and the do-not-access instruction; the claim about copied fixtures is extra and not contradictory.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "Which environment variables (names only) does the service depend on?",
+          "answer": "CARRIER_WEBHOOK_SECRET and DATABASE_URL. The handover records names only, not values.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "CARRIER_WEBHOOK_SECRET",
+              "present": true
+            },
+            {
+              "fact": "DATABASE_URL",
+              "present": true
+            }
+          ],
+          "judge_notes": "Both environment variable names are listed correctly.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        }
+      ],
+      "aggregate": {
+        "key_fact_recall": 0.9696969696969696,
+        "contradictions": 0,
+        "verbatim_exact_match": 1.0,
+        "stale_fact_use": 0.0,
+        "next_step_accuracy": 1.0,
+        "brief_tokens": 3548,
+        "probes_scored": 11,
+        "probes_total": 11
+      }
+    },
+    "summary": {
+      "status": "ok",
+      "error": null,
+      "handover_chars": 4361,
+      "probes": [
+        {
+          "question": "What did we decide about remembering which webhook events were already processed, why, and which alternative did we reject?",
+          "answer": "We decided to record processed webhook event ids in a Postgres table, `webhook_events`, with `event_id` as a unique key plus a `received_at` column. This is because carrier retries cause customers to get duplicate \"out for delivery\" texts when the endpoint is slow. The rejected alternative was Redis, which is not available and will not be provisioned by the platform team before next quarter.",
+          "key_fact_recall": 0.3333333333333333,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "Record each event_id in a Postgres table webhook_events with a unique constraint",
+              "present": true
+            },
+            {
+              "fact": "there is no Redis available and the platform team will not provision one before next quarter",
+              "present": false
+            },
+            {
+              "fact": "Redis SETNX with an expiry",
+              "present": false
+            }
+          ],
+          "judge_notes": "Matches the Postgres table decision and the unavailable-Redis reason, but never names Redis SETNX with an expiry.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "What did we decide about stopping the carrier's timeouts and retries, why, and what did we rule out?",
+          "answer": "The decision was to acknowledge webhooks quickly. The handler verifies the signature, records the event id, submits `notify_customer` to a module-level `ThreadPoolExecutor(max_workers=8)`, and returns 202 immediately. Duplicates return 200 without notifying, so the carrier stops retrying. Ruled out: Celery, because it needs a broker, and Redis. The accepted trade-off is that queued work is lost if the process dies, and the carrier's retry covers that.",
+          "key_fact_recall": 0.6666666666666666,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "Send the notification from a ThreadPoolExecutor(max_workers=8) and return 202 immediately",
+              "present": true
+            },
+            {
+              "fact": "the carrier retries when the response takes too long, and a thread pool needs no new infrastructure",
+              "present": false
+            },
+            {
+              "fact": "Celery",
+              "present": true
+            }
+          ],
+          "judge_notes": "Gives the ThreadPoolExecutor(max_workers=8) and 202 design and rules out Celery, but omits the carrier-retry and no-new-infrastructure rationale.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "Which option did we rule out for recording processed event ids, and what was the reason?",
+          "answer": "Redis was ruled out for recording processed event ids. It is not available, and the platform team will not provision it before next quarter. (Celery was also ruled out, but because it needs a broker.)",
+          "key_fact_recall": 0.5,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "Redis SETNX with an expiry",
+              "present": false
+            },
+            {
+              "fact": "there is no Redis available and the platform team will not provision one before next quarter",
+              "present": true
+            }
+          ],
+          "judge_notes": "Names Redis as ruled out with the availability reason, but does not mention SETNX with an expiry.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "What exact replay tolerance (in seconds) did we set for the signature timestamp? Give the number.",
+          "answer": "The replay tolerance is 324 seconds. Webhooks whose timestamp is more than 324 seconds old are rejected.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "324",
+              "present": true
+            }
+          ],
+          "judge_notes": "States 324 seconds correctly.",
+          "error": null,
+          "verbatim_exact_match": 1,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "What is the exact command I use to run the dedupe tests? Quote it exactly.",
+          "answer": "The command is: `pytest -q tests/test_webhooks.py -k dedupe`",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "pytest -q tests/test_webhooks.py -k dedupe",
+              "present": true
+            }
+          ],
+          "judge_notes": "The pytest command matches exactly.",
+          "error": null,
+          "verbatim_exact_match": 1,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "Quote exactly the SQL statement we settled on for recording a webhook event id.",
+          "answer": "The SQL statement is: `INSERT INTO webhook_events (event_id, received_at) VALUES (%s, now()) ON CONFLICT (event_id) DO NOTHING;`",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "INSERT INTO webhook_events (event_id, received_at) VALUES (%s, now()) ON CONFLICT (event_id) DO NOTHING;",
+              "present": true
+            }
+          ],
+          "judge_notes": "The SQL statement matches exactly.",
+          "error": null,
+          "verbatim_exact_match": 1,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "How many hours do we keep dedupe rows before the cleanup deletes them (the current value)?",
+          "answer": "The current value is 48 hours. Rows older than that are deleted by a scheduled `DELETE ... WHERE received_at < now() - interval '48 hours'`. The user corrected an earlier 24-hour suggestion after checking that the carrier retries for up to 48 hours.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "48 hours",
+              "present": true
+            }
+          ],
+          "judge_notes": "States 48 hours and only mentions 24 hours as a corrected earlier suggestion.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": 0,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "What is the next step I planned to do when I come back?",
+          "answer": "The first planned step is to write `migrations/0029_add_event_dedupe.sql`, which creates the `webhook_events` table with a unique `event_id`. The number 0029 has not been checked against the existing migrations folder. After that come applying the migration on staging, adding the replay test, confirming the raw-body HMAC fix, adding the cleanup job, reviewing the PR, and confirming whether the pasted secret needs rotating.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "Write migrations/0029_add_event_dedupe.sql (webhook_events table with a unique event_id), apply it on staging, then add the replay test that delivers the same event twice",
+              "present": true
+            }
+          ],
+          "judge_notes": "Gives the migration path, the unique event_id table, staging, and the replay test, though the replay test is not described in detail.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": 1
+        },
+        {
+          "question": "What is the current file path of the webhook handler module?",
+          "answer": "The webhook handler is at `app/webhooks.py`. It was originally `app/handlers.py`, and the user renamed it and updated the import in `app/__init__.py`.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "app/webhooks.py",
+              "present": true
+            }
+          ],
+          "judge_notes": "States app/webhooks.py as the current path and does not claim the handler is still in handlers.py.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "Which folder did we stop using, so it should not be accessed again?",
+          "answer": "The folder `~/scratch/dispatch-relay-carrier-samples/` should not be accessed again. The useful sample payloads were already copied into `tests/fixtures/`.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "~/scratch/dispatch-relay-carrier-samples/",
+              "present": true
+            }
+          ],
+          "judge_notes": "The folder path matches exactly.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "Which environment variables (names only) does the service depend on?",
+          "answer": "The service depends on `CARRIER_WEBHOOK_SECRET` and `DATABASE_URL`.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "CARRIER_WEBHOOK_SECRET",
+              "present": true
+            },
+            {
+              "fact": "DATABASE_URL",
+              "present": true
+            }
+          ],
+          "judge_notes": "Both environment variable names are given correctly.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        }
+      ],
+      "aggregate": {
+        "key_fact_recall": 0.8636363636363636,
+        "contradictions": 0,
+        "verbatim_exact_match": 1.0,
+        "stale_fact_use": 0.0,
+        "next_step_accuracy": 1.0,
+        "brief_tokens": 1091,
+        "probes_scored": 11,
+        "probes_total": 11
+      }
+    },
+    "full_history": {
+      "status": "ok",
+      "error": null,
+      "handover_chars": 20694,
+      "probes": [
+        {
+          "question": "What did we decide about remembering which webhook events were already processed, why, and which alternative did we reject?",
+          "answer": "We decided to record each delivery's event_id in a Postgres table, webhook_events, with a unique constraint on event_id. A new insert means we process the event, and a conflict means it is a duplicate we skip. We chose this because Redis is not available and the platform team won't provision it before next quarter. We rejected Redis SETNX with an expiry for that reason, and an in-memory set because it is lost on restart and not shared between workers.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "Record each event_id in a Postgres table webhook_events with a unique constraint",
+              "present": true
+            },
+            {
+              "fact": "there is no Redis available and the platform team will not provision one before next quarter",
+              "present": true
+            },
+            {
+              "fact": "Redis SETNX with an expiry",
+              "present": true
+            }
+          ],
+          "judge_notes": "All three facts are stated; the rejected Redis option is correctly described as rejected, not chosen.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "What did we decide about stopping the carrier's timeouts and retries, why, and what did we rule out?",
+          "answer": "We decided to stop the timeouts and retries by sending the notification from a ThreadPoolExecutor(max_workers=8) and returning 202 immediately, so the carrier doesn't wait on the SMS call. Duplicates return 200 without notifying anyone. We ruled out Celery because it needs a broker and no new infrastructure is allowed.",
+          "key_fact_recall": 0.6666666666666666,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "Send the notification from a ThreadPoolExecutor(max_workers=8) and return 202 immediately",
+              "present": true
+            },
+            {
+              "fact": "the carrier retries when the response takes too long, and a thread pool needs no new infrastructure",
+              "present": false
+            },
+            {
+              "fact": "Celery",
+              "present": true
+            }
+          ],
+          "judge_notes": "The carrier-retry reason for the thread pool is missing; Celery is correctly listed as ruled out.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "Which option did we rule out for recording processed event ids, and what was the reason?",
+          "answer": "We ruled out Redis SETNX with an expiry, because there is no Redis available and the platform team won't provision one before next quarter. We also ruled out an in-memory set, because it is lost on restart and is not shared between workers, so duplicates would still get through.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "Redis SETNX with an expiry",
+              "present": true
+            },
+            {
+              "fact": "there is no Redis available and the platform team will not provision one before next quarter",
+              "present": true
+            }
+          ],
+          "judge_notes": "Both the rejected Redis SETNX option and the no-Redis reason are stated.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "What exact replay tolerance (in seconds) did we set for the signature timestamp? Give the number.",
+          "answer": "324 seconds. The signature check rejects timestamps older than that.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "324",
+              "present": true
+            }
+          ],
+          "judge_notes": "The replay tolerance of 324 is stated correctly.",
+          "error": null,
+          "verbatim_exact_match": 1,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "What is the exact command I use to run the dedupe tests? Quote it exactly.",
+          "answer": "pytest -q tests/test_webhooks.py -k dedupe",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "pytest -q tests/test_webhooks.py -k dedupe",
+              "present": true
+            }
+          ],
+          "judge_notes": "The test command matches the reference exactly.",
+          "error": null,
+          "verbatim_exact_match": 1,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "Quote exactly the SQL statement we settled on for recording a webhook event id.",
+          "answer": "INSERT INTO webhook_events (event_id, received_at) VALUES (%s, now()) ON CONFLICT (event_id) DO NOTHING;",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "INSERT INTO webhook_events (event_id, received_at) VALUES (%s, now()) ON CONFLICT (event_id) DO NOTHING;",
+              "present": true
+            }
+          ],
+          "judge_notes": "The SQL statement matches the reference exactly.",
+          "error": null,
+          "verbatim_exact_match": 1,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "How many hours do we keep dedupe rows before the cleanup deletes them (the current value)?",
+          "answer": "48 hours. This was corrected from 24 hours because the carrier retries for up to 48 hours. The cleanup deletes rows received more than 48 hours ago.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "48 hours",
+              "present": true
+            }
+          ],
+          "judge_notes": "48 hours is stated as current; the 24-hour mention is framed as a past correction, not the current value.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": 0,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "What is the next step I planned to do when I come back?",
+          "answer": "Write migrations/0029_add_event_dedupe.sql, which creates the webhook_events table with a unique event_id. Then apply it on staging, and add the replay test that delivers the same event twice.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "Write migrations/0029_add_event_dedupe.sql (webhook_events table with a unique event_id), apply it on staging, then add the replay test that delivers the same event twice",
+              "present": true
+            }
+          ],
+          "judge_notes": "The next step matches the reference, with the migration file, staging apply, and replay test.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": 1
+        },
+        {
+          "question": "What is the current file path of the webhook handler module?",
+          "answer": "app/webhooks.py. It was renamed from app/handlers.py, and the import in app/__init__.py was updated.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "app/webhooks.py",
+              "present": true
+            }
+          ],
+          "judge_notes": "The path app/webhooks.py is correct; the rename history is unsupported extra detail but not a contradiction.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "Which folder did we stop using, so it should not be accessed again?",
+          "answer": "~/scratch/dispatch-relay-carrier-samples/. You said you're done with it and copied the useful payloads into tests/fixtures/, so don't look in that folder again.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "~/scratch/dispatch-relay-carrier-samples/",
+              "present": true
+            }
+          ],
+          "judge_notes": "The folder path is correct; the claim about copied payloads is unsupported extra detail but not a contradiction.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        },
+        {
+          "question": "Which environment variables (names only) does the service depend on?",
+          "answer": "CARRIER_WEBHOOK_SECRET and DATABASE_URL. The handover doesn't list any others.",
+          "key_fact_recall": 1.0,
+          "contradictions": 0,
+          "facts": [
+            {
+              "fact": "CARRIER_WEBHOOK_SECRET",
+              "present": true
+            },
+            {
+              "fact": "DATABASE_URL",
+              "present": true
+            }
+          ],
+          "judge_notes": "Both environment variable names are listed correctly.",
+          "error": null,
+          "verbatim_exact_match": null,
+          "stale_fact_use": null,
+          "next_step_accuracy": null
+        }
+      ],
+      "aggregate": {
+        "key_fact_recall": 0.9696969696969696,
+        "contradictions": 0,
+        "verbatim_exact_match": 1.0,
+        "stale_fact_use": 0.0,
+        "next_step_accuracy": 1.0,
+        "brief_tokens": 5174,
+        "probes_scored": 11,
+        "probes_total": 11
+      }
+    }
+  },
+  "workspace_capture": {
+    "status": "ok",
+    "error": null,
+    "capture_recall": 0.8333,
+    "recall_still_relevant": 0.9231,
+    "recall_done_with": 0.6,
+    "capture_precision": 0.7647,
+    "status_accuracy": 1.0,
+    "secret_leakage": 0,
+    "manifest_items": 18,
+    "workspace_items": 17,
+    "matched": 15
+  }
+}

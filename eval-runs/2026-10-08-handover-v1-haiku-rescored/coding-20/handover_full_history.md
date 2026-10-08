@@ -1,0 +1,79 @@
+Full transcript of the previous chat:
+
+=== user ===
+I'm working on parcel-hooks, a small Flask service that receives delivery-status webhooks from our carrier and texts the customer. The repo is at ~/work/parcel-hooks, I'm on branch fix/webhook-dedupe, and the last commit is f6f11a2 Verify webhook signature before parsing. The problem: when our endpoint is slow the carrier retries the delivery, and customers get the same 'out for delivery' text two or three times. Support has logged 24 complaints this week (thread SUP-2845). I saved some raw payloads from the carrier's sandbox in ~/scratch/parcel-hooks-carrier-samples/ and the webhook code lives in app/handlers.py. I use pytest and ruff, and the GitHub connector is attached to this chat if you want to look at the PR. Can we fix the duplicate texts?
+
+=== assistant ===
+Yes. Two things are probably going on: the same event is delivered more than once, and our handler has no memory of which events it already processed. That makes the fix a matter of idempotency rather than speed alone. Could you paste the handler and one raw payload? I'd like to see whether each delivery carries a stable event identifier we can key on.
+
+=== user ===
+Can you give me a one-line explanation of idempotency I can put in the PR description?
+
+=== assistant ===
+An operation is idempotent if doing it twice leaves the system in the same state as doing it once, so a retried request cannot cause a second side effect.
+
+=== user ===
+Here's the handler from app/handlers.py:
+
+```python
+@bp.route("/webhooks/carrier", methods=["POST"])
+def carrier_webhook():
+    payload = request.get_json()
+    if not verify_signature(payload, request.headers.get("X-Carrier-Signature", "")):
+        return "bad signature", 401
+    notify_customer(payload["tracking_id"], payload["status"])
+    return "ok", 200
+```
+
+Every payload has an `event_id` like `evt_9f3a`. One more thing: locally the signature check keeps failing even though I exported `CARRIER_WEBHOOK_SECRET=sk-fake-290d6a6e9fd070339ce922ed` and `DATABASE_URL` for my local Postgres. I also pulled the failing deliveries up through the Sentry connector earlier, and I've seen what I needed there.
+
+=== assistant ===
+Good, `event_id` is the key we need. On the signature failure: `verify_signature` is receiving the parsed JSON, so it probably re-serialises it and the bytes no longer match what the carrier signed. Compute the HMAC over the raw body from `request.get_data()` instead, and parse JSON afterwards. Also, avoid pasting real secrets into chats like this one; if that value is real, rotate it. For the duplicates, nothing in this handler remembers an event, so a retry runs `notify_customer` again.
+
+=== user ===
+OK, noted on the secret. Back to the duplicates: what are my options for remembering which event ids we've already handled?
+
+=== assistant ===
+Three realistic options. (1) Redis with SETNX and an expiry: fast and the expiry is built in, but it adds a service to run. (2) A Postgres table keyed by event_id with a unique constraint: you already run Postgres, the insert is atomic so two workers cannot both win, and cleanup is a scheduled delete. (3) An in-memory set: simplest, but it is lost on restart and not shared between workers, so duplicates would still slip through. If you cannot add infrastructure, option 2 is the one I'd pick.
+
+=== user ===
+We don't have Redis and the platform team won't provision it before next quarter, so go with the Postgres table and a unique constraint on event_id. I'm also done with the samples folder ~/scratch/parcel-hooks-carrier-samples/: I copied the three useful payloads into tests/fixtures/, so please stop looking in that scratch folder, and I don't need ngrok any more since fixtures replace live sandbox traffic. Keep the dedupe rows for 24 hours and then delete them.
+
+=== assistant ===
+Agreed. The insert is the whole idempotency check: if it inserts a row we process the event, if the conflict clause swallows it we skip. This is the statement I'd use:
+
+```sql
+INSERT INTO webhook_events (event_id, received_at) VALUES (%s, now()) ON CONFLICT (event_id) DO NOTHING;
+```
+
+Check the affected row count (`cur.rowcount`): 1 means new, 0 means duplicate. A scheduled cleanup then runs `DELETE FROM webhook_events WHERE received_at < now() - interval '24 hours';`.
+
+=== user ===
+Second problem: the handler sends the text synchronously, and that is why the carrier times out and retries in the first place. Should we put Celery in front of it?
+
+=== assistant ===
+Celery would work, but it needs a broker, and you've said no new infrastructure, so you would be back to asking for something you can't have. A simpler route is a module-level `ThreadPoolExecutor`: the handler verifies the signature, records the event id, submits the notification to the pool and returns 202 immediately. The cost is that queued work is lost if the process dies, but the carrier's own retry covers that gap now that duplicates are harmless.
+
+=== user ===
+Good, use ThreadPoolExecutor(max_workers=8) and return 202 right away; Celery is out because it needs a broker we don't have. Also, I renamed app/handlers.py to app/webhooks.py so it matches the blueprint name, and updated the import in app/__init__.py. The signature check should reject timestamps older than 868 seconds to stop replays.
+
+=== assistant ===
+Understood. I'll refer to app/webhooks.py from here on. The handler flow becomes: read raw body, verify the HMAC, reject if the timestamp is more than 868 seconds old, insert the event id, and only if the insert was new, submit `notify_customer` to the pool and return 202. Duplicates return 200 without notifying anyone, so the carrier stops retrying them.
+
+=== user ===
+One correction on retention: I checked the carrier's docs (https://docs.example-carrier.test/parcel-hooks/webhooks) and they keep retrying for up to 72 hours, so 24 hours was too short. Please use 72 hours for the cleanup. For the tests I run `pytest -q tests/test_webhooks.py -k dedupe` and I follow the python-testing skill's conventions.
+
+=== assistant ===
+Thanks for catching that: with 24 hours a late retry could slip past cleanup and notify again. The cleanup interval becomes 72 hours, and I'll name the dedupe tests so that `-k dedupe` selects them. I'll keep to the python-testing conventions: one behaviour per test, fixtures from tests/fixtures/, no network.
+
+=== user ===
+Do you think I should add a CHANGELOG entry for this fix?
+
+=== assistant ===
+If the project already keeps one, yes: one line saying what users of the service will notice, which here is fewer repeated customer messages. If there is no changelog, the PR description is enough, do not start a new convention for one fix.
+
+=== user ===
+I have to stop for today. Can you recap where we are and what's next?
+
+=== assistant ===
+Where we are: duplicates are handled by a webhook_events table with a unique event_id, notifications are sent from a thread pool with an immediate 202, and the signature check now uses the raw body. Next step: write migrations/0023_add_event_dedupe.sql (webhook_events table with a unique event_id), apply it on staging, then add the replay test that delivers the same event twice. The module is app/webhooks.py on branch fix/webhook-dedupe.

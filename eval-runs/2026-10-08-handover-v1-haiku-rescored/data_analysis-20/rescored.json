@@ -1,0 +1,542 @@
+{
+  "scenario": "data_analysis-20",
+  "dataset": "datasets/handover-v1",
+  "strict_next_step": false,
+  "variants": {
+    "checkpoint": {
+      "probes": [
+        {
+          "question": "What did we decide about how to define churn, why, and which option did we reject?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What did we decide about which model to fit, why, and what did we rule out?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which churn signal did we decide not to use, and what was the reason?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the exact overall churn rate we reported after the rebuild? Give the number as written.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the exact command I use to rebuild the features? Quote it exactly.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Quote exactly the line of code we use to compute tenure.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "How many customers are in the analysis population now (the current count)?",
+          "kind": "stale",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": 1,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": 0,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the next step I planned to do when I come back?",
+          "kind": "next_step",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": 1
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": 1
+          }
+        },
+        {
+          "question": "What is the current path of the exploratory notebook?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which folder did we stop using, so it should not be accessed again?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which environment variable names did this work use (names only)?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        }
+      ],
+      "aggregate": {
+        "old": {
+          "verbatim_exact_match": 1.0,
+          "stale_fact_use": 1.0,
+          "next_step_accuracy": 1.0
+        },
+        "new": {
+          "verbatim_exact_match": 1.0,
+          "stale_fact_use": 0.0,
+          "next_step_accuracy": 1.0
+        }
+      }
+    },
+    "summary": {
+      "probes": [
+        {
+          "question": "What did we decide about how to define churn, why, and which option did we reject?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What did we decide about which model to fit, why, and what did we rule out?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which churn signal did we decide not to use, and what was the reason?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the exact overall churn rate we reported after the rebuild? Give the number as written.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the exact command I use to rebuild the features? Quote it exactly.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Quote exactly the line of code we use to compute tenure.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 0,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 0,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "How many customers are in the analysis population now (the current count)?",
+          "kind": "stale",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": 1,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": 0,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the next step I planned to do when I come back?",
+          "kind": "next_step",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": 0
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": 0
+          }
+        },
+        {
+          "question": "What is the current path of the exploratory notebook?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which folder did we stop using, so it should not be accessed again?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which environment variable names did this work use (names only)?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        }
+      ],
+      "aggregate": {
+        "old": {
+          "verbatim_exact_match": 0.6666666666666666,
+          "stale_fact_use": 1.0,
+          "next_step_accuracy": 0.0
+        },
+        "new": {
+          "verbatim_exact_match": 0.6666666666666666,
+          "stale_fact_use": 0.0,
+          "next_step_accuracy": 0.0
+        }
+      }
+    },
+    "full_history": {
+      "probes": [
+        {
+          "question": "What did we decide about how to define churn, why, and which option did we reject?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What did we decide about which model to fit, why, and what did we rule out?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which churn signal did we decide not to use, and what was the reason?",
+          "kind": "decision",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the exact overall churn rate we reported after the rebuild? Give the number as written.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the exact command I use to rebuild the features? Quote it exactly.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Quote exactly the line of code we use to compute tenure.",
+          "kind": "verbatim",
+          "old": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": 1,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "How many customers are in the analysis population now (the current count)?",
+          "kind": "stale",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": 1,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": 0,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "What is the next step I planned to do when I come back?",
+          "kind": "next_step",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": 1
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": 1
+          }
+        },
+        {
+          "question": "What is the current path of the exploratory notebook?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which folder did we stop using, so it should not be accessed again?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        },
+        {
+          "question": "Which environment variable names did this work use (names only)?",
+          "kind": "fact",
+          "old": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          },
+          "new": {
+            "verbatim_exact_match": null,
+            "stale_fact_use": null,
+            "next_step_accuracy": null
+          }
+        }
+      ],
+      "aggregate": {
+        "old": {
+          "verbatim_exact_match": 1.0,
+          "stale_fact_use": 1.0,
+          "next_step_accuracy": 1.0
+        },
+        "new": {
+          "verbatim_exact_match": 1.0,
+          "stale_fact_use": 0.0,
+          "next_step_accuracy": 1.0
+        }
+      }
+    }
+  },
+  "workspace_capture": {
+    "source": "handover_checkpoint.md ('Set up first' section)",
+    "old": {
+      "status": "ok",
+      "error": null,
+      "capture_recall": 0.6111,
+      "capture_precision": 0.7857,
+      "status_accuracy": 1.0,
+      "secret_leakage": 0,
+      "manifest_items": 18,
+      "workspace_items": 14,
+      "matched": 11
+    },
+    "new": {
+      "capture_recall": 0.5556,
+      "recall_still_relevant": 0.7692,
+      "recall_done_with": 0.0,
+      "capture_precision": 0.75,
+      "status_accuracy": 1.0,
+      "secret_leakage": 0,
+      "manifest_items": 18,
+      "workspace_items": 12,
+      "matched": 10
+    }
+  }
+}
