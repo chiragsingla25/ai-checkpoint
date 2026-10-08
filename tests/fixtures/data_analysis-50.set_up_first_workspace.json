@@ -1,0 +1,63 @@
+{
+ "files": [
+  {
+   "path": "~/work/retention-study/data/raw/",
+   "status": "still_relevant"
+  },
+  {
+   "path": "~/work/retention-study/notebooks/01_churn_eda.ipynb",
+   "status": "still_relevant"
+  },
+  {
+   "path": "~/work/retention-study/scripts/build_features.py",
+   "status": "still_relevant"
+  },
+  {
+   "path": "~/work/retention-study/data/features.parquet",
+   "status": "still_relevant"
+  }
+ ],
+ "repos": [
+  {
+   "path": "~/work/retention-study",
+   "status": "still_relevant"
+  }
+ ],
+ "access": [],
+ "connectors": [],
+ "tools": [
+  {
+   "name": "pandas",
+   "status": "still_relevant"
+  },
+  {
+   "name": "jupyter",
+   "status": "still_relevant"
+  },
+  {
+   "name": "duckdb",
+   "status": "still_relevant"
+  },
+  {
+   "name": "scikit-learn",
+   "status": "still_relevant"
+  },
+  {
+   "name": "seaborn / matplotlib",
+   "status": "still_relevant"
+  }
+ ],
+ "env_vars": [],
+ "skills": [
+  {
+   "name": "dataviz",
+   "status": "still_relevant"
+  }
+ ],
+ "references": [
+  {
+   "name": "Finance KPI definitions",
+   "status": "still_relevant"
+  }
+ ]
+}

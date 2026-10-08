@@ -1,0 +1,44 @@
+[
+  {
+    "id": "F-001",
+    "title": "Fixed code scorers (stale, workspace capture, next step) and a free rescore command",
+    "acceptance": [
+      "Stale scorer, real answers now score 0 (all were 1 in results/handover-v1-haiku): coding-100 full_history '48 hours. This replaced the original 24 hours, because the carrier retries for up to 48 hours...'; coding-100 checkpoint '48 hours. ... The cleanup SQL in the handover still shows 24 hours from an earlier draft, and the handover says to use 48 hours instead.'; coding-20 summary '72 hours. The earlier SQL still says 24 hours and needs updating to `interval '72 hours'`.'; coding-20 full_history (contains the old SQL `interval '24 hours'` described as 'the original draft'); data_analysis-100 checkpoint '51,225 customers ... The earlier figure of 51,896 is superseded.'; data_analysis-50 summary '50,441 customers. The earlier figure of 50,816 included test accounts and was corrected.'; data_analysis-20 full_history '46,088 customers ... The earlier figure of 46,910 was wrong'. These exact strings (copied from results.json into tests/fixtures) are asserted in tests/test_metrics.py with the matching answer_key correction.",
+      "Stale scorer still returns 1 when the old value is the answer: '24 hours.' (old=24 hours, new=48 hours) -> 1; 'Rows are kept for 24 hours, not 48 hours.' -> 1; '51,896 customers.' (old=51,896, new=51,225) -> 1; an answer containing the old value and no new value -> 1.",
+      "Stale scorer returns 0 when the old value is absent ('48 hours.' -> 0, 'I don't know.' -> 0) and when the old value is mentioned only as history before the new one ('The original 24 hours was replaced by 48 hours.' -> 0). Answers previously scored 0 in the real run (coding-20 checkpoint '72 hours. ... (changed from 24 after checking the carrier docs...)', coding-100 summary, coding-50 summary) still score 0, and every existing stale test in tests/ still passes unchanged.",
+      "Workspace matcher: capture_scores matches manifest files 'data/raw/' with checkpoint files '~/work/retention-study/data/raw/' (suffix on a path-segment boundary after normalising ~/$HOME and trailing slash); it does NOT match 'raw/x' to 'data/raw', 'data/raw' to '~/mydata/raw', or 'data/raw' to '~/work/data/raw2'.",
+      "Workspace matcher counts a manifest access item '~/work/retention-study' as recalled when the checkpoint lists the same path only under repos (and likewise files<->repos<->access); items in other categories (tools, connectors, env_vars, skills, references) still only match within their own category. status_accuracy still compares status of matched pairs, and a matched item with the wrong status lowers it (unit test).",
+      "capture_scores output gains recall_still_relevant and recall_done_with (null when the manifest has no item of that status), alongside the existing capture_recall/capture_precision/status_accuracy/secret_leakage keys. Test using the real data_analysis-50 manifest plus a fixture workspace transcribed from results/handover-v1-haiku/data_analysis-50/handover_checkpoint.md 'Set up first' section (copied into tests/fixtures): recall_still_relevant == round(11/13, 4) == 0.8462 (Google Drive connector and ANALYTICS_DB_PATH missing) and recall_done_with == 0.0, making the omission of done-with items visible.",
+      "Existing exact-key matches give identical results to before (all existing capture tests pass unchanged).",
+      "Next-step scorer is lenient by default: real coding-20 checkpoint answer ('...0023 was proposed but not confirmed. Then write the migration creating webhook_events ..., apply it to staging ..., and add the replay test ...') with required_terms ['0023_add_event_dedupe.sql','staging','replay'] -> 1 (was 0). 'migration 0023', 'add_event_dedupe' and 'MIGRATIONS/0023_ADD_EVENT_DEDUPE.SQL' each satisfy the filename term; 'migration 0029', '00230' and '10023' do not.",
+      "Next-step scorer still returns 0 for the real answers that genuinely miss a required step: coding-20 summary (no staging/replay), coding-50 summary (signature fix), data_analysis-100 checkpoint (no 'slide'), data_analysis-100 summary, data_analysis-20 summary. With strict mode on (e.g. next_step_correct(..., strict=True) and a `--strict-next-step` CLI flag) the coding-20 checkpoint answer scores 0 as before.",
+      "`checkpoint-eval rescore <results dir> [--dataset datasets/handover-v1]` recomputes verbatim_exact_match, stale_fact_use, next_step_accuracy and workspace capture for every <scenario>/results.json under the dir, using saved answers and the scenario file named by results.json 'scenario'; it makes no model call (a test passes a model/factory that raises on any call, or runs with no API key set) and does not modify results.json or handover_*.md (bytes unchanged); it writes rescored.json per scenario folder and prints a per-variant table of old vs new values.",
+      "Rescore workspace capture uses a saved checkpoint.json when present (new `run`/`suite` runs save the checkpoint variant's checkpoint as checkpoint.json next to results.json) and otherwise parses the 'Set up first' section of handover_checkpoint.md, recording which source was used in rescored.json.",
+      "Rescore on a small fixture copied into tests/fixtures (coding-20 and data_analysis-50 from the Haiku run, plus their dataset files): stale_fact_use becomes 0 for every non-error stale probe, coding-20 checkpoint next_step_accuracy becomes 1, probes that had an error (e.g. coding-50 checkpoint 'expected 11 answers, got 12') stay null. Tests never read results/ at test time.",
+      "Rescore failure cases: a path that does not exist, a folder with no results.json anywhere, and a scenario name missing from --dataset each exit non-zero with a one-line error naming the path or scenario; a scenario whose rescore fails does not stop the others."
+    ]
+  },
+  {
+    "id": "F-002",
+    "title": "One corrective retry for batched answer and judge replies with the wrong item count",
+    "acceptance": [
+      "answer_probes: with a FakeModel scripted to reply with 12 answers for 11 questions and then 11, the probes get the 11 answers and no errors; the model is called exactly twice and the second call's messages include the first reply and a short instruction stating the expected count (11).",
+      "answer_probes: if the retry also returns the wrong count, every probe is marked with the existing 'answer reply unusable: expected N answers, got M' error (M from the retry), after exactly two calls.",
+      "judge_answers: same behaviour (wrong verdict count then right count -> scored; wrong twice -> existing 'judge reply unusable: expected N verdicts' errors; exactly two calls).",
+      "A reply with the right count on the first attempt makes exactly one call (unchanged), and replies that are not parseable JSON keep their current handling; the full suite with FakeModel passes."
+    ]
+  },
+  {
+    "id": "F-003",
+    "title": "Dataset generator fix, self-check, and datasets/handover-v2",
+    "acceptance": [
+      "A self-check function (e.g. generate.check_scenario(scn) -> list of missing items) reports every probe key_fact, answer_key decision reason, next-step required term, manifest item key (path/name per category; reference name and url), env var name and secret value that does not appear case-insensitively in the scenario's chat text.",
+      "The self-check run on datasets/handover-v1 is non-empty and lists ANALYTICS_DB_PATH for every data_analysis scenario and 'Carrier webhook docs' for every coding scenario (proves it catches the real bugs); a test asserts this.",
+      "A test generates all 6 v2 scenarios and asserts the self-check returns [] for each; in particular the chats contain 'ANALYTICS_DB_PATH', 'Carrier webhook docs', 'finance needs coefficients they can read and explain, and a more complex model would add little' and 'a thread pool needs no new infrastructure'.",
+      "datasets/handover-v2/ holds the same 6 scenarios (coding/data_analysis x 20/50/100) with meta.generator == 'handover-v2' and a README.md documenting the seed (7) and the exact regenerate command; regenerating with that command is byte-identical to the committed files (test).",
+      "datasets/handover-v1/ is unchanged (`git diff --stat datasets/handover-v1` is empty) and the generator can still reproduce it byte-identically (e.g. `checkpoint-eval generate --seed 7 --version handover-v1`); the existing byte-identical test still passes.",
+      "`checkpoint-eval generate --version bogus` exits non-zero with an error listing the valid versions.",
+      "No file under src/ai_checkpoint/ outside src/ai_checkpoint/eval/ changes across all three features (`git diff --stat -- src/ai_checkpoint ':!src/ai_checkpoint/eval'` is empty), and `$HOME/aic-venv/bin/python -m pytest -q` passes with at least the original 282 tests plus the new ones, offline."
+    ]
+  }
+]

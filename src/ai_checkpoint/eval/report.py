@@ -41,9 +41,10 @@ def markdown_table(results: Dict[str, Any]) -> str:
             "",
             "Workspace capture (checkpoint variant, scored by code against the manifest; secret leakage is measured on the model's checkpoint before the product's save-time redaction):",
             "",
-            "| capture recall | capture precision | status accuracy | secret leakage (distinct secrets, before save-time redaction) |",
-            "|---|---|---|---|",
-            f"| {_pct(wc['capture_recall'])} | {_pct(wc['capture_precision'])} | "
+            "| capture recall | recall still-relevant | recall done-with | capture precision | status accuracy | secret leakage (distinct secrets, before save-time redaction) |",
+            "|---|---|---|---|---|---|",
+            f"| {_pct(wc['capture_recall'])} | {_pct(wc.get('recall_still_relevant'))} | "
+            f"{_pct(wc.get('recall_done_with'))} | {_pct(wc['capture_precision'])} | "
             f"{_pct(wc['status_accuracy'])} | {flag} |",
         ]
     return "\n".join(lines) + "\n"
@@ -58,6 +59,10 @@ def write_outputs(results: Dict[str, Any], out_dir) -> Dict[str, Path]:
     paths = {"json": out / "results.json", "markdown": out / "results.md"}
     paths["json"].write_text(json.dumps(public, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     paths["markdown"].write_text(markdown_table(results), encoding="utf-8")
+    if results.get("_checkpoint") is not None:
+        paths["checkpoint"] = out / "checkpoint.json"
+        paths["checkpoint"].write_text(json.dumps(results["_checkpoint"], indent=2, ensure_ascii=False) + "\n",
+                                       encoding="utf-8")
     for name, text in handovers.items():
         if text is not None:
             p = out / f"handover_{name}.md"

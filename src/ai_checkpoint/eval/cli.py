@@ -51,6 +51,9 @@ def _common(r: argparse.ArgumentParser) -> None:
                    help="maximum model calls in flight at once, across all scenarios (default 8; 1 = fully sequential)")
     r.add_argument("--force", action="store_true",
                    help="replace an existing results.json in the output folder (default: refuse)")
+    r.add_argument("--strict-next-step", action="store_true", dest="strict_next_step",
+                   help="score next-step answers by literal required terms (default: a filename term "
+                   "also matches its stem or number, e.g. 'migration 0023')")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -67,6 +70,13 @@ def build_parser() -> argparse.ArgumentParser:
     st.add_argument("scenarios", nargs="+", help="scenario JSON files, e.g. datasets/handover-v1/*.json")
     _common(st)
     st.add_argument("--out", required=True, help="output directory; results go to OUT/<scenario-name>/")
+    rs = sub.add_parser("rescore", help="recompute the code-scored metrics of a finished run from its saved "
+                        "answers (no model call; results.json is not modified)")
+    rs.add_argument("results_dir", help="a results folder, or a folder of scenario folders, containing results.json files")
+    rs.add_argument("--dataset", default="datasets/handover-v1",
+                    help="folder with the scenario files named by results.json 'scenario' (default datasets/handover-v1)")
+    rs.add_argument("--strict-next-step", action="store_true", dest="strict_next_step",
+                    help="literal required terms for next-step scoring")
     g = sub.add_parser("generate", help="generate the handover dataset (6 scenario files; no model needed)")
     g.add_argument("--seed", type=int, default=7, help="integer seed (default 7; the committed dataset uses 7)")
     g.add_argument("--out", required=True, help="output directory (created if missing)")
@@ -92,8 +102,10 @@ def _exists_error(folder: Path) -> str:
     return f"error: {folder / 'results.json'} already exists; use --force to replace it"
 
 
-def _run_one(scenario, model, folder: Path, timeout: float, workers: int = 1, limiter=None) -> str:
-    results = run_scenario(scenario, model, timeout=timeout, progress=sys.stderr, workers=workers, limiter=limiter)
+def _run_one(scenario, model, folder: Path, timeout: float, workers: int = 1, limiter=None,
+             strict_next_step: bool = False) -> str:
+    results = run_scenario(scenario, model, timeout=timeout, progress=sys.stderr, workers=workers, limiter=limiter,
+                           strict_next_step=strict_next_step)
     write_outputs(results, folder)
     return markdown_table(results)
 
@@ -106,7 +118,7 @@ def _run(args) -> int:
             print(_exists_error(out), file=sys.stderr)
             return 1
         model = make_model(args.model, args.model_name, args.timeout)
-        table = _run_one(scenario, model, out, args.timeout, args.workers)
+        table = _run_one(scenario, model, out, args.timeout, args.workers, strict_next_step=args.strict_next_step)
     except (CheckpointError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -138,7 +150,7 @@ def _suite(args) -> int:
     with ThreadPoolExecutor(max_workers=len(scenarios) if args.workers > 1 else 1) as ex:
         # sequential (workers=1) runs each scenario inline in order; otherwise scenarios start together
         # and share the limiter; results are reported in command-line order either way
-        futs = [ex.submit(_run_one, sc, model, out / sc.name, args.timeout, args.workers, limiter)
+        futs = [ex.submit(_run_one, sc, model, out / sc.name, args.timeout, args.workers, limiter, args.strict_next_step)
                 for sc in scenarios]
         for i, (sc, fut) in enumerate(zip(scenarios, futs)):
             try:
@@ -157,6 +169,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "generate":
         return _generate(args)
+    if args.command == "rescore":
+        from .rescore import rescore_command
+        return rescore_command(args.results_dir, args.dataset, args.strict_next_step)
     if args.command == "suite":
         return _suite(args)
     return _run(args)

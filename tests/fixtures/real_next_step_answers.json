@@ -1,0 +1,180 @@
+[
+ {
+  "scenario": "coding-100",
+  "variant": "checkpoint",
+  "required_terms": [
+   "0029_add_event_dedupe.sql",
+   "staging",
+   "replay"
+  ],
+  "answer": "The next step is to write migrations/0029_add_event_dedupe.sql, which creates the webhook_events table with a unique event_id column and a received_at timestamp. Confirm the migration number with the user first if the repo already has a different latest migration. After that, apply it on staging, then update the handler, and then write the replay test.",
+  "recorded_next_step_accuracy": 1
+ },
+ {
+  "scenario": "coding-100",
+  "variant": "summary",
+  "required_terms": [
+   "0029_add_event_dedupe.sql",
+   "staging",
+   "replay"
+  ],
+  "answer": "Write `migrations/0029_add_event_dedupe.sql` to create the `webhook_events` table with a unique `event_id`. Then apply it on staging and add a replay test that delivers the same event twice and asserts one notification. The number 0029 was a suggestion and has not been checked against existing migrations.",
+  "recorded_next_step_accuracy": 1
+ },
+ {
+  "scenario": "coding-100",
+  "variant": "full_history",
+  "required_terms": [
+   "0029_add_event_dedupe.sql",
+   "staging",
+   "replay"
+  ],
+  "answer": "Write migrations/0029_add_event_dedupe.sql, which creates the webhook_events table with a unique event_id. Apply it on staging, then add the replay test that delivers the same event twice.",
+  "recorded_next_step_accuracy": 1
+ },
+ {
+  "scenario": "coding-20",
+  "variant": "checkpoint",
+  "required_terms": [
+   "0023_add_event_dedupe.sql",
+   "staging",
+   "replay"
+  ],
+  "answer": "Next, open ~/work/parcel-hooks on branch fix/webhook-dedupe at commit f6f11a2 (or later) and check whether migrations/ exists and what the next migration number is; 0023 was proposed but not confirmed. Then write the migration creating webhook_events (unique event_id, received_at timestamp), apply it to staging once the user confirms staging exists and how to reach it, and add the replay test in tests/test_webhooks.py. The raw-body signature change and the handler changes are not yet written. Confirm this with the user before continuing.",
+  "recorded_next_step_accuracy": 0
+ },
+ {
+  "scenario": "coding-20",
+  "variant": "summary",
+  "required_terms": [
+   "0023_add_event_dedupe.sql",
+   "staging",
+   "replay"
+  ],
+  "answer": "Write `migrations/0023_add_event_dedupe.sql` to create `webhook_events` with a unique `event_id`.",
+  "recorded_next_step_accuracy": 0
+ },
+ {
+  "scenario": "coding-20",
+  "variant": "full_history",
+  "required_terms": [
+   "0023_add_event_dedupe.sql",
+   "staging",
+   "replay"
+  ],
+  "answer": "Write migrations/0023_add_event_dedupe.sql (the webhook_events table with a unique event_id), apply it on staging, then add the replay test that delivers the same event twice.",
+  "recorded_next_step_accuracy": 1
+ },
+ {
+  "scenario": "coding-50",
+  "variant": "summary",
+  "required_terms": [
+   "0027_add_event_dedupe.sql",
+   "staging",
+   "replay"
+  ],
+  "answer": "Fix the signature check to use the raw body: compute the HMAC over `request.get_data()` and parse the JSON afterwards. Confirm the hypothesis first. This is step 1 of the next steps.",
+  "recorded_next_step_accuracy": 0
+ },
+ {
+  "scenario": "coding-50",
+  "variant": "full_history",
+  "required_terms": [
+   "0027_add_event_dedupe.sql",
+   "staging",
+   "replay"
+  ],
+  "answer": "Write migrations/0027_add_event_dedupe.sql, which creates the webhook_events table with a unique event_id. Apply it on staging, then add the replay test that delivers the same event twice.",
+  "recorded_next_step_accuracy": 1
+ },
+ {
+  "scenario": "data_analysis-100",
+  "variant": "checkpoint",
+  "required_terms": [
+   "logistic",
+   "slide"
+  ],
+  "answer": "Re-run the logistic regression on the rebuilt features. First open notebooks/01_churn_eda.ipynb, load data/features.parquet, and confirm 51,225 customers and a 0.0983 churn rate. Then check for near-constant and collinear features, fit the scaler on the training split only, and fit the L2 logistic regression with a fixed random_state.",
+  "recorded_next_step_accuracy": 0
+ },
+ {
+  "scenario": "data_analysis-100",
+  "variant": "summary",
+  "required_terms": [
+   "logistic",
+   "slide"
+  ],
+  "answer": "Set `AS_OF` in the notebook, then confirm the 51,225 population and the 0.0983 churn rate after the feature rebuild.",
+  "recorded_next_step_accuracy": 0
+ },
+ {
+  "scenario": "data_analysis-100",
+  "variant": "full_history",
+  "required_terms": [
+   "logistic",
+   "slide"
+  ],
+  "answer": "Re-run the logistic regression on the rebuilt features, then draft the three-slide finance summary in Google Drive.",
+  "recorded_next_step_accuracy": 1
+ },
+ {
+  "scenario": "data_analysis-20",
+  "variant": "checkpoint",
+  "required_terms": [
+   "logistic",
+   "slide"
+  ],
+  "answer": "Re-run the logistic regression on the rebuilt features. Before that, confirm data/features.parquet has 46,088 customers and churn rate 0.2373, and check the date parsing by counting NaT values after explicit-format parsing. After the model, draft the three-slide finance summary. The handover does not confirm where the draft will be stored; Google Drive was proposed but not agreed.",
+  "recorded_next_step_accuracy": 1
+ },
+ {
+  "scenario": "data_analysis-20",
+  "variant": "summary",
+  "required_terms": [
+   "logistic",
+   "slide"
+  ],
+  "answer": "The first planned step is to confirm that the Snowflake password has been rotated, since it was pasted into the chat and should be treated as compromised. After that, define AS_OF and parse the dates per format.",
+  "recorded_next_step_accuracy": 0
+ },
+ {
+  "scenario": "data_analysis-20",
+  "variant": "full_history",
+  "required_terms": [
+   "logistic",
+   "slide"
+  ],
+  "answer": "Re-run the logistic regression on the rebuilt features, then draft the three-slide finance summary in Google Drive.",
+  "recorded_next_step_accuracy": 1
+ },
+ {
+  "scenario": "data_analysis-50",
+  "variant": "checkpoint",
+  "required_terms": [
+   "logistic",
+   "slide"
+  ],
+  "answer": "Re-run the logistic regression on the rebuilt features in data/features.parquet (the current step). After that, draft the three-slide finance summary. The handover also lists confirming the tables load and that is_test accounts are excluded, then checking the draft against the finance KPI wiki. Confirm with the user before carrying on.",
+  "recorded_next_step_accuracy": 1
+ },
+ {
+  "scenario": "data_analysis-50",
+  "variant": "summary",
+  "required_terms": [
+   "logistic",
+   "slide"
+  ],
+  "answer": "Re-run the logistic regression on the rebuilt features (population 50,441, churn rate 0.1259). Then resolve the convergence warning and check coefficient stability, and build the methodology and finance summary slides.",
+  "recorded_next_step_accuracy": 1
+ },
+ {
+  "scenario": "data_analysis-50",
+  "variant": "full_history",
+  "required_terms": [
+   "logistic",
+   "slide"
+  ],
+  "answer": "Re-run the logistic regression on the rebuilt features, then draft the three-slide finance summary in Google Drive.",
+  "recorded_next_step_accuracy": 1
+ }
+]

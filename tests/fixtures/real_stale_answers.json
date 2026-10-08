@@ -1,0 +1,138 @@
+[
+ {
+  "scenario": "coding-100",
+  "variant": "checkpoint",
+  "old": "24 hours",
+  "new": "48 hours",
+  "answer": "48 hours. Dedupe rows are kept for 48 hours and then deleted by a scheduled job. The cleanup SQL in the handover still shows 24 hours from an earlier draft, and the handover says to use 48 hours instead.",
+  "recorded_stale_fact_use": 1
+ },
+ {
+  "scenario": "coding-100",
+  "variant": "summary",
+  "old": "24 hours",
+  "new": "48 hours",
+  "answer": "48 hours. Dedupe rows are kept for 48 hours and then deleted.",
+  "recorded_stale_fact_use": 0
+ },
+ {
+  "scenario": "coding-100",
+  "variant": "full_history",
+  "old": "24 hours",
+  "new": "48 hours",
+  "answer": "48 hours. This replaced the original 24 hours, because the carrier retries for up to 48 hours. The cleanup is `DELETE FROM webhook_events WHERE received_at < now() - interval '48 hours';`.",
+  "recorded_stale_fact_use": 1
+ },
+ {
+  "scenario": "coding-20",
+  "variant": "checkpoint",
+  "old": "24 hours",
+  "new": "72 hours",
+  "answer": "72 hours. Dedupe rows are kept for 72 hours (changed from 24 after checking the carrier docs, which retry for up to 72 hours), and are deleted with: DELETE FROM webhook_events WHERE received_at < now() - interval '72 hours';",
+  "recorded_stale_fact_use": 0
+ },
+ {
+  "scenario": "coding-20",
+  "variant": "summary",
+  "old": "24 hours",
+  "new": "72 hours",
+  "answer": "72 hours. The earlier SQL still says 24 hours and needs updating to `interval '72 hours'`.",
+  "recorded_stale_fact_use": 1
+ },
+ {
+  "scenario": "coding-20",
+  "variant": "full_history",
+  "old": "24 hours",
+  "new": "72 hours",
+  "answer": "72 hours. The earlier 24-hour value was corrected because the carrier retries for up to 72 hours. The cleanup is DELETE FROM webhook_events WHERE received_at < now() - interval '24 hours'; was the original draft and must be updated to 72 hours.",
+  "recorded_stale_fact_use": 1
+ },
+ {
+  "scenario": "coding-50",
+  "variant": "summary",
+  "old": "24 hours",
+  "new": "48 hours",
+  "answer": "48 hours. The scheduled cleanup runs `DELETE FROM webhook_events WHERE received_at < now() - interval '48 hours';`. The earlier 24-hour draft was wrong and must be updated.",
+  "recorded_stale_fact_use": 0
+ },
+ {
+  "scenario": "coding-50",
+  "variant": "full_history",
+  "old": "24 hours",
+  "new": "48 hours",
+  "answer": "48 hours. The cleanup deletes rows older than that. This was corrected from 24 hours after checking the carrier docs, which retry for up to 48 hours.",
+  "recorded_stale_fact_use": 1
+ },
+ {
+  "scenario": "data_analysis-100",
+  "variant": "checkpoint",
+  "old": "51,896",
+  "new": "51,225",
+  "answer": "51,225 customers (test accounts excluded and duplicates dropped). The earlier figure of 51,896 is superseded.",
+  "recorded_stale_fact_use": 1
+ },
+ {
+  "scenario": "data_analysis-100",
+  "variant": "summary",
+  "old": "51,896",
+  "new": "51,225",
+  "answer": "51,225 customers, after excluding `is_test` accounts. The earlier figure of 51,896 included test accounts and is wrong.",
+  "recorded_stale_fact_use": 1
+ },
+ {
+  "scenario": "data_analysis-100",
+  "variant": "full_history",
+  "old": "51,896",
+  "new": "51,225",
+  "answer": "51,225 customers (after excluding is_test accounts; the earlier 51,896 figure was wrong).",
+  "recorded_stale_fact_use": 1
+ },
+ {
+  "scenario": "data_analysis-20",
+  "variant": "checkpoint",
+  "old": "46,910",
+  "new": "46,088",
+  "answer": "46,088 customers (the test-free population). The earlier count of 46,910 is superseded and must not be reused.",
+  "recorded_stale_fact_use": 1
+ },
+ {
+  "scenario": "data_analysis-20",
+  "variant": "summary",
+  "old": "46,910",
+  "new": "46,088",
+  "answer": "46,088 customers, after excluding is_test accounts. The earlier figure of 46,910 was wrong because it included test accounts.",
+  "recorded_stale_fact_use": 1
+ },
+ {
+  "scenario": "data_analysis-20",
+  "variant": "full_history",
+  "old": "46,910",
+  "new": "46,088",
+  "answer": "46,088 customers, after excluding internal test accounts (is_test). The earlier figure of 46,910 was wrong because it included accounts that never pay.",
+  "recorded_stale_fact_use": 1
+ },
+ {
+  "scenario": "data_analysis-50",
+  "variant": "checkpoint",
+  "old": "50,816",
+  "new": "50,441",
+  "answer": "50,441 customers (test accounts excluded). The earlier figure of 50,816 is superseded.",
+  "recorded_stale_fact_use": 1
+ },
+ {
+  "scenario": "data_analysis-50",
+  "variant": "summary",
+  "old": "50,816",
+  "new": "50,441",
+  "answer": "50,441 customers. The earlier figure of 50,816 included test accounts and was corrected.",
+  "recorded_stale_fact_use": 1
+ },
+ {
+  "scenario": "data_analysis-50",
+  "variant": "full_history",
+  "old": "50,816",
+  "new": "50,441",
+  "answer": "50,441 customers. This is after excluding internal test accounts (is_test). The earlier figure of 50,816 was wrong because it included test accounts.",
+  "recorded_stale_fact_use": 1
+ }
+]

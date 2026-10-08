@@ -296,7 +296,8 @@ def _aggregate(probes: List[dict], brief_tokens: Optional[int]) -> Dict[str, Any
     }
 
 
-def _eval_variant(caller: Caller, scenario: Scenario, name: str, h: Dict[str, Any]) -> Dict[str, Any]:
+def _eval_variant(caller: Caller, scenario: Scenario, name: str, h: Dict[str, Any],
+                  strict_next_step: bool = False) -> Dict[str, Any]:
     """Answer + judge for one variant (judge starts right after this variant's own answer)."""
     if h["handover"] is None:
         return {
@@ -316,7 +317,7 @@ def _eval_variant(caller: Caller, scenario: Scenario, name: str, h: Dict[str, An
         for i, (pr, a) in enumerate(zip(scenario.probes, answers)):
             if isinstance(a, str):
                 probes.append({"question": pr.question, "answer": a, **verdicts[i],
-                               **score_probe(pr.kind, pr.target, scenario.answer_key, a)})
+                               **score_probe(pr.kind, pr.target, scenario.answer_key, a, strict_next_step)})
             else:
                 probes.append(_probe_entry(pr, None, a[1]))
     except CallFailed as e:
@@ -330,7 +331,7 @@ def _eval_variant(caller: Caller, scenario: Scenario, name: str, h: Dict[str, An
 
 def run_scenario(scenario: Scenario, model: Model, timeout: Optional[float] = DEFAULT_TIMEOUT,
                  progress: Optional[TextIO] = None, workers: int = 1,
-                 limiter: Optional[Any] = None) -> Dict[str, Any]:
+                 limiter: Optional[Any] = None, strict_next_step: bool = False) -> Dict[str, Any]:
     """Run all variants and probes with 8 model calls: compaction, summary, then per variant one
     answer call and one judge call. Returns the JSON-ready results dict plus handover texts
     under the key ``_handovers`` (not part of the results file; the CLI writes them separately).
@@ -343,7 +344,7 @@ def run_scenario(scenario: Scenario, model: Model, timeout: Optional[float] = DE
                     limiter=limiter if workers > 1 else None)
     if workers <= 1:
         handovers = build_handovers(scenario, model, caller)
-        variants: Dict[str, Any] = {name: _eval_variant(caller, scenario, name, handovers[name]) for name in VARIANTS}
+        variants: Dict[str, Any] = {name: _eval_variant(caller, scenario, name, handovers[name], strict_next_step) for name in VARIANTS}
     else:
         # compaction || summary || full_history answer; each variant's judge follows its own answer
         makers = {
@@ -354,7 +355,7 @@ def run_scenario(scenario: Scenario, model: Model, timeout: Optional[float] = DE
 
         def chain(name: str):
             h = makers[name]()
-            return h, _eval_variant(caller, scenario, name, h)
+            return h, _eval_variant(caller, scenario, name, h, strict_next_step)
 
         with ThreadPoolExecutor(max_workers=len(VARIANTS)) as ex:
             futs = {name: ex.submit(chain, name) for name in VARIANTS}
@@ -378,6 +379,9 @@ def run_scenario(scenario: Scenario, model: Model, timeout: Optional[float] = DE
         "variants": variants,
         "_handovers": {k: v["handover"] for k, v in handovers.items()},
     }
+    cp = handovers["checkpoint"].get("checkpoint")
+    if cp is not None:
+        result["_checkpoint"] = cp.to_dict()  # saved as checkpoint.json so `rescore` can score the workspace exactly
     if scenario.environment:
         result["workspace_capture"] = _workspace_capture(scenario, handovers["checkpoint"])
     return result
