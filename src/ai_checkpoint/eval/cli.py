@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List, Optional
 
@@ -24,6 +26,16 @@ def _positive(text: str) -> float:
     return v
 
 
+def _workers(text: str) -> int:
+    try:
+        v = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number") from None
+    if v < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return v
+
+
 def _common(r: argparse.ArgumentParser) -> None:
     r.add_argument("--model", choices=MODEL_CHOICES, default="fake",
                    help="fake (offline, deterministic; default), anthropic or openai "
@@ -35,6 +47,8 @@ def _common(r: argparse.ArgumentParser) -> None:
     r.add_argument("--timeout", type=_positive, default=DEFAULT_TIMEOUT,
                    help="seconds allowed per model call; a failed or timed-out call is retried once "
                    f"(default {DEFAULT_TIMEOUT:g})")
+    r.add_argument("--workers", type=_workers, default=8, metavar="N",
+                   help="maximum model calls in flight at once, across all scenarios (default 8; 1 = fully sequential)")
     r.add_argument("--force", action="store_true",
                    help="replace an existing results.json in the output folder (default: refuse)")
 
@@ -78,8 +92,8 @@ def _exists_error(folder: Path) -> str:
     return f"error: {folder / 'results.json'} already exists; use --force to replace it"
 
 
-def _run_one(scenario, model, folder: Path, timeout: float) -> str:
-    results = run_scenario(scenario, model, timeout=timeout, progress=sys.stderr)
+def _run_one(scenario, model, folder: Path, timeout: float, workers: int = 1, limiter=None) -> str:
+    results = run_scenario(scenario, model, timeout=timeout, progress=sys.stderr, workers=workers, limiter=limiter)
     write_outputs(results, folder)
     return markdown_table(results)
 
@@ -92,7 +106,7 @@ def _run(args) -> int:
             print(_exists_error(out), file=sys.stderr)
             return 1
         model = make_model(args.model, args.model_name, args.timeout)
-        table = _run_one(scenario, model, out, args.timeout)
+        table = _run_one(scenario, model, out, args.timeout, args.workers)
     except (CheckpointError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -120,16 +134,22 @@ def _suite(args) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
     failed = 0
-    for i, sc in enumerate(scenarios):
-        try:
-            table = _run_one(sc, model, out / sc.name, args.timeout)
-        except (CheckpointError, OSError) as e:
-            print(f"error: scenario {sc.name}: {e}", file=sys.stderr)
-            failed += 1
-            continue
-        if i:
-            print()
-        print(table, end="")
+    limiter = threading.BoundedSemaphore(args.workers) if args.workers > 1 else None
+    with ThreadPoolExecutor(max_workers=len(scenarios) if args.workers > 1 else 1) as ex:
+        # sequential (workers=1) runs each scenario inline in order; otherwise scenarios start together
+        # and share the limiter; results are reported in command-line order either way
+        futs = [ex.submit(_run_one, sc, model, out / sc.name, args.timeout, args.workers, limiter)
+                for sc in scenarios]
+        for i, (sc, fut) in enumerate(zip(scenarios, futs)):
+            try:
+                table = fut.result()
+            except (CheckpointError, OSError) as e:
+                print(f"error: scenario {sc.name}: {e}", file=sys.stderr)
+                failed += 1
+                continue
+            if i:
+                print()
+            print(table, end="")
     return 1 if failed else 0
 
 

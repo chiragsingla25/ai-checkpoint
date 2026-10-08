@@ -162,7 +162,7 @@ def test_suite_duplicate_names_exit_before_any_call(tmp_path, capsys):
 
 def test_progress_lines_on_stderr_only(tmp_path, capsys):
     f = write_small(tmp_path, "p.json")
-    rc, out, err = cli(["run", str(f), "--out", str(tmp_path / "o")], capsys)
+    rc, out, err = cli(["run", str(f), "--workers", "1", "--out", str(tmp_path / "o")], capsys)
     lines = err.strip().splitlines()
     assert rc == 0 and len(lines) == 8
     stages = [l.split("] ", 1)[1].split(" ")[0] for l in lines]

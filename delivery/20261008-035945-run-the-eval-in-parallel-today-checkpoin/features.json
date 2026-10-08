@@ -1,0 +1,21 @@
+[
+  {
+    "id": "F-001",
+    "title": "Parallel eval with --workers N for checkpoint-eval run and suite",
+    "acceptance": [
+      "`checkpoint-eval run --help` and `checkpoint-eval suite --help` both list `--workers N` with default 8; omitting it behaves as --workers 8",
+      "`--workers 0`, `--workers -1` and `--workers abc` on both run and suite exit with code 2 (argparse error on stderr) and create no output directory or files",
+      "With FakeModel, `suite datasets/handover-v1/*.json --workers 1 --out A` and `--workers 8 --out B` produce byte-identical results.json, results.md and every handover file for every scenario (`diff -r A B` is empty); the same holds for `run` on a single scenario with --workers 1 vs 8, and for --workers 2 and 3",
+      "Output with --workers 1 is byte-identical to the output of the pre-change code (git stash / HEAD) for the same dataset and FakeModel, i.e. existing sequential behaviour is unchanged",
+      "stdout of `suite` with --workers 8 is byte-identical to stdout with --workers 1: tables appear in the order the scenario files were given on the command line, separated by one blank line, regardless of completion order",
+      "In-flight cap: a test that wraps a model's complete() with a thread-safe counter (e.g. FakeModel with a small delay) records a maximum concurrent call count that never exceeds N for N in {1, 2, 3, 8}, and reaches N (>1) for N>1 on the 6-scenario suite, showing calls actually overlap",
+      "Within a scenario: compaction and summary calls overlap in time; the full_history answer call starts before compaction/summary finish; each variant's judge call starts after its own answer call returns and does not wait for other variants (verifiable by a test that records call start/end times per stage)",
+      "Progress on stderr with --workers 8: every line matches the existing `[<scenario>] <stage> (...) [k/total] <t>s...` format (no line contains two progress records or a fragment), each scenario's counters k are exactly 1..total each appearing once, and total line count equals the --workers 1 run",
+      "Timing: with CHECKPOINT_EVAL_FAKE_DELAY=0.5, the 6-scenario dataset (datasets/handover-v1, 48 calls) takes about 24s with --workers 1 and under 5s wall-clock with --workers 8",
+      "Timeout and retry stay per call under --workers 8: CHECKPOINT_EVAL_FAKE_FAIL_FIRST=1 still completes every scenario with `(after retry)` progress lines and the same results as --workers 1; CHECKPOINT_EVAL_FAKE_DELAY greater than --timeout still yields the existing timeout failure messages (FAILED after 2 attempts (timeout)) per scenario",
+      "Failure isolation: in a suite where one scenario fails (e.g. its OUT/<name> path is pre-created as a regular file, or its compaction call fails), the other scenarios still finish and write identical results to a clean run, `error: scenario <name>: ...` is printed on stderr, stdout tables for the others keep their order, and exit code is 1",
+      "Product code is unchanged: `git diff --stat` touches only src/ai_checkpoint/eval/, tests/ and docs/README; nothing under the save/resume/MCP server modules changes",
+      "The full test suite passes (`$HOME/aic-venv/bin/python -m pytest -q`, previously 259 tests) plus new tests covering the criteria above"
+    ]
+  }
+]

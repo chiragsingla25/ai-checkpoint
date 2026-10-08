@@ -118,6 +118,9 @@ def parse_transcript(text: str) -> List[Message]:
     ]
 
 
+_FAKE_LOCK = threading.Lock()
+
+
 class FakeModel:
     """Deterministic stand-in: heuristics over the text it is given, no randomness.
 
@@ -136,10 +139,12 @@ class FakeModel:
             except ValueError:
                 pass
         if os.environ.get("CHECKPOINT_EVAL_FAKE_FAIL_FIRST"):
-            seen = self.__dict__.setdefault("_failed_once", set())
-            key = json.dumps([system, messages], sort_keys=True)
-            if key not in seen:
+            with _FAKE_LOCK:
+                seen = self.__dict__.setdefault("_failed_once", set())
+                key = json.dumps([system, messages], sort_keys=True)
+                first = key not in seen
                 seen.add(key)
+            if first:
                 raise ModelError("fake model: injected failure (CHECKPOINT_EVAL_FAKE_FAIL_FIRST)")
         user = messages[-1]["content"] if messages else ""
         if system.startswith(TASK_COMPACT):

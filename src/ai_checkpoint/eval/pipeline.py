@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, TextIO
 
 from ..brief import estimate_tokens, render_brief
@@ -97,6 +99,10 @@ def extract_json_list(text: str) -> list:
     raise ValueError("no JSON array found in the reply")
 
 
+# one lock for progress lines and counters, shared by every Caller so lines never interleave
+_PROGRESS_LOCK = threading.Lock()
+
+
 class CallFailed(ModelError):
     """A model call failed on both attempts."""
 
@@ -105,25 +111,34 @@ class Caller:
     """Runs model calls with a per-call timeout, one retry, and a progress line per call."""
 
     def __init__(self, model: Model, scenario: str = "", timeout: Optional[float] = DEFAULT_TIMEOUT,
-                 progress: Optional[TextIO] = None, total: int = 8):
+                 progress: Optional[TextIO] = None, total: int = 8, limiter: Optional[Any] = None):
         self.model, self.scenario, self.timeout = model, scenario, timeout
+        self.limiter = limiter  # semaphore shared across scenarios: caps in-flight model calls
         self.progress, self.total = progress, total
         self.count = 0
         self.t0 = time.monotonic()
 
     def _say(self, stage: str, detail: str, note: str = "") -> None:
-        if self.progress is None:
-            return
-        label = f"{stage} ({detail})" if detail else stage
-        print(f"[{self.scenario}] {label} [{self.count}/{self.total}] {time.monotonic() - self.t0:.1f}s{note}",
-              file=self.progress, flush=True)
+        """Count one finished call and print its progress line (atomically)."""
+        with _PROGRESS_LOCK:
+            self.count += 1
+            if self.progress is None:
+                return
+            label = f"{stage} ({detail})" if detail else stage
+            print(f"[{self.scenario}] {label} [{self.count}/{self.total}] {time.monotonic() - self.t0:.1f}s{note}",
+                  file=self.progress, flush=True)
+
+    def _attempt(self, system: str, messages: List[dict]) -> str:
+        if self.limiter is None:
+            return call_with_timeout(self.model, system, messages, self.timeout)
+        with self.limiter:
+            return call_with_timeout(self.model, system, messages, self.timeout)
 
     def call(self, stage: str, system: str, messages: List[dict], detail: str = "") -> str:
-        self.count += 1
         last: Optional[ModelError] = None
         for attempt in (1, 2):
             try:
-                out = call_with_timeout(self.model, system, messages, self.timeout)
+                out = self._attempt(system, messages)
             except ModelError as e:
                 last = e
                 continue
@@ -156,25 +171,36 @@ def _call(caller: Optional[Caller], model: Model, stage: str, system: str, messa
     return caller.call(stage, system, messages, detail)
 
 
-def build_handovers(scenario: Scenario, model: Model, caller: Optional[Caller] = None) -> Dict[str, Dict[str, Any]]:
-    """variant -> {"handover": text | None, "error": str | None}."""
-    out: Dict[str, Dict[str, Any]] = {}
+def _checkpoint_handover(scenario: Scenario, model: Model, caller: Optional[Caller]) -> Dict[str, Any]:
     try:
         brief, cp = _compaction_handover(scenario, model, caller)
-        out["checkpoint"] = {"handover": brief, "error": None, "checkpoint": cp}
+        return {"handover": brief, "error": None, "checkpoint": cp}
     except ValidationError as e:  # recorded, not fatal; model/API failures (ModelError) still abort
-        out["checkpoint"] = {"handover": None, "error": str(e)}
+        return {"handover": None, "error": str(e)}
+
+
+def _summary_handover(scenario: Scenario, model: Model, caller: Optional[Caller]) -> Dict[str, Any]:
     summary = _call(
         caller, model, "summarize", SUMMARY_SYSTEM, [{"role": "user", "content": render_transcript(scenario.messages)}]
     ).strip()
     if summary:
-        out["summary"] = {"handover": "Summary of the previous chat:\n\n" + summary, "error": None}
-    else:
-        out["summary"] = {"handover": None, "error": "summary model returned an empty reply"}
-    out["full_history"] = {
+        return {"handover": "Summary of the previous chat:\n\n" + summary, "error": None}
+    return {"handover": None, "error": "summary model returned an empty reply"}
+
+
+def _full_handover(scenario: Scenario) -> Dict[str, Any]:
+    return {
         "handover": "Full transcript of the previous chat:\n\n" + render_transcript(scenario.messages),
         "error": None,
     }
+
+
+def build_handovers(scenario: Scenario, model: Model, caller: Optional[Caller] = None) -> Dict[str, Dict[str, Any]]:
+    """variant -> {"handover": text | None, "error": str | None}."""
+    out: Dict[str, Dict[str, Any]] = {}
+    out["checkpoint"] = _checkpoint_handover(scenario, model, caller)
+    out["summary"] = _summary_handover(scenario, model, caller)
+    out["full_history"] = _full_handover(scenario)
     return out
 
 
@@ -270,46 +296,79 @@ def _aggregate(probes: List[dict], brief_tokens: Optional[int]) -> Dict[str, Any
     }
 
 
+def _eval_variant(caller: Caller, scenario: Scenario, name: str, h: Dict[str, Any]) -> Dict[str, Any]:
+    """Answer + judge for one variant (judge starts right after this variant's own answer)."""
+    if h["handover"] is None:
+        return {
+            "status": "failed", "error": h["error"], "handover_chars": None,
+            "probes": [], "aggregate": _aggregate([], None),
+        }
+    text = h["handover"]
+    status, error = "ok", None
+    try:
+        answers = answer_probes(caller, text, scenario.probes, name)
+        good = [i for i, a in enumerate(answers) if isinstance(a, str)]
+        verdicts: Dict[int, Dict[str, Any]] = {}
+        if good:
+            res = judge_answers(caller, [scenario.probes[i] for i in good], [answers[i] for i in good], name)
+            verdicts = dict(zip(good, res))
+        probes = []
+        for i, (pr, a) in enumerate(zip(scenario.probes, answers)):
+            if isinstance(a, str):
+                probes.append({"question": pr.question, "answer": a, **verdicts[i],
+                               **score_probe(pr.kind, pr.target, scenario.answer_key, a)})
+            else:
+                probes.append(_probe_entry(pr, None, a[1]))
+    except CallFailed as e:
+        status, error = "failed", str(e)
+        probes = [_probe_entry(pr, None, str(e)) for pr in scenario.probes]
+    return {
+        "status": status, "error": error, "handover_chars": len(text),
+        "probes": probes, "aggregate": _aggregate(probes, estimate_tokens(text)),
+    }
+
+
 def run_scenario(scenario: Scenario, model: Model, timeout: Optional[float] = DEFAULT_TIMEOUT,
-                 progress: Optional[TextIO] = None) -> Dict[str, Any]:
+                 progress: Optional[TextIO] = None, workers: int = 1,
+                 limiter: Optional[Any] = None) -> Dict[str, Any]:
     """Run all variants and probes with 8 model calls: compaction, summary, then per variant one
     answer call and one judge call. Returns the JSON-ready results dict plus handover texts
     under the key ``_handovers`` (not part of the results file; the CLI writes them separately).
-    Compaction/summary failures after the retry raise; answer/judge failures are recorded."""
-    caller = Caller(model, scenario.name, timeout, progress, total=2 + 2 * len(VARIANTS))
-    handovers = build_handovers(scenario, model, caller)
-    variants: Dict[str, Any] = {}
-    for name in VARIANTS:
-        h = handovers[name]
-        if h["handover"] is None:
-            variants[name] = {
-                "status": "failed", "error": h["error"], "handover_chars": None,
-                "probes": [], "aggregate": _aggregate([], None),
-            }
-            continue
-        text = h["handover"]
-        status, error = "ok", None
-        try:
-            answers = answer_probes(caller, text, scenario.probes, name)
-            good = [i for i, a in enumerate(answers) if isinstance(a, str)]
-            verdicts: Dict[int, Dict[str, Any]] = {}
-            if good:
-                res = judge_answers(caller, [scenario.probes[i] for i in good], [answers[i] for i in good], name)
-                verdicts = dict(zip(good, res))
-            probes = []
-            for i, (pr, a) in enumerate(zip(scenario.probes, answers)):
-                if isinstance(a, str):
-                    probes.append({"question": pr.question, "answer": a, **verdicts[i],
-                                   **score_probe(pr.kind, pr.target, scenario.answer_key, a)})
-                else:
-                    probes.append(_probe_entry(pr, None, a[1]))
-        except CallFailed as e:
-            status, error = "failed", str(e)
-            probes = [_probe_entry(pr, None, str(e)) for pr in scenario.probes]
-        variants[name] = {
-            "status": status, "error": error, "handover_chars": len(text),
-            "probes": probes, "aggregate": _aggregate(probes, estimate_tokens(text)),
+    Compaction/summary failures after the retry raise; answer/judge failures are recorded.
+    With workers > 1 the independent calls run concurrently (never more than ``workers`` in flight,
+    counted across every scenario sharing ``limiter``); results are identical to workers=1."""
+    if workers > 1 and limiter is None:
+        limiter = threading.BoundedSemaphore(workers)
+    caller = Caller(model, scenario.name, timeout, progress, total=2 + 2 * len(VARIANTS),
+                    limiter=limiter if workers > 1 else None)
+    if workers <= 1:
+        handovers = build_handovers(scenario, model, caller)
+        variants: Dict[str, Any] = {name: _eval_variant(caller, scenario, name, handovers[name]) for name in VARIANTS}
+    else:
+        # compaction || summary || full_history answer; each variant's judge follows its own answer
+        makers = {
+            "checkpoint": lambda: _checkpoint_handover(scenario, model, caller),
+            "summary": lambda: _summary_handover(scenario, model, caller),
+            "full_history": lambda: _full_handover(scenario),
         }
+
+        def chain(name: str):
+            h = makers[name]()
+            return h, _eval_variant(caller, scenario, name, h)
+
+        with ThreadPoolExecutor(max_workers=len(VARIANTS)) as ex:
+            futs = {name: ex.submit(chain, name) for name in VARIANTS}
+            outcomes: Dict[str, Any] = {}
+            first_exc: Optional[BaseException] = None
+            for name in VARIANTS:  # fixed order; waits for every task before leaving the with-block
+                try:
+                    outcomes[name] = futs[name].result()
+                except BaseException as e:  # noqa: BLE001 - re-raised below
+                    first_exc = first_exc or e
+        if first_exc is not None:
+            raise first_exc
+        handovers = {name: outcomes[name][0] for name in VARIANTS}
+        variants = {name: outcomes[name][1] for name in VARIANTS}
     result = {
         "scenario": scenario.name,
         "description": scenario.description,
