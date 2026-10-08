@@ -12,3 +12,7 @@ htmlcov/
 
 # eval outputs
 results/
+
+# local secrets (never commit)
+.env
+.env.*
