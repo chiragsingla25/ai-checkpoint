@@ -20,6 +20,11 @@ from .fillers import CODING_FILLERS, DATA_FILLERS
 
 TASKS = ("coding", "data_analysis")
 LENGTHS = (20, 50, 100)
+# handover-v1 is the first dataset, kept reproducible byte for byte (its chats leave some key facts unstated).
+# handover-v2 uses the same storylines and the same random draws, but states every answer-key fact,
+# manifest item, env var and decision reason in the chat (see ``check_scenario``).
+VERSIONS = ("handover-v1", "handover-v2")
+DEFAULT_VERSION = "handover-v1"
 
 Pair = Tuple[str, str]
 
@@ -36,7 +41,7 @@ def _trap_item(base: dict, trap: str) -> dict:
 
 # --------------------------------------------------------------------------- coding
 
-def _coding_story(rng: random.Random) -> Dict[str, Any]:
+def _coding_story(rng: random.Random, v2: bool = False) -> Dict[str, Any]:
     P = rng.choice(["parcel-hooks", "dispatch-relay", "shiptrack-hooks", "courier-bridge"])
     root = f"~/work/{P}"
     scratch = f"~/scratch/{P}-carrier-samples/"
@@ -54,6 +59,7 @@ def _coding_story(rng: random.Random) -> Dict[str, Any]:
     sql = "INSERT INTO webhook_events (event_id, received_at) VALUES (%s, now()) ON CONFLICT (event_id) DO NOTHING;"
     cmd = "pytest -q tests/test_webhooks.py -k dedupe"
     doc_url = f"https://docs.example-carrier.test/{P}/webhooks"
+    docs_name = "Carrier webhook docs" if v2 else "carrier's docs"
     last_commit = f"{sha} Verify webhook signature before parsing"
     next_text = (f"Write migrations/{mig} (webhook_events table with a unique event_id), apply it on staging, "
                  "then add the replay test that delivers the same event twice")
@@ -90,7 +96,8 @@ def _coding_story(rng: random.Random) -> Dict[str, Any]:
         "(3) An in-memory set: simplest, but it is lost on restart and not shared between workers, so duplicates would still slip through. "
         "If you cannot add infrastructure, option 2 is the one I'd pick."))
     beats.append((
-        f"We don't have Redis and the platform team won't provision it before next quarter, so go with the Postgres table and a unique constraint on event_id. "
+        (f"We don't have Redis and the platform team won't provision it before next quarter, so go with the Postgres table and a unique constraint on event_id. " if not v2 else
+         f"{d1['rejected']} is out: {d1['reason']}. So {d1['decision'][0].lower() + d1['decision'][1:]}. ") +
         f"I'm also done with the samples folder {scratch}: I copied the three useful payloads into tests/fixtures/, so please stop looking in that scratch folder, and I don't need ngrok any more since fixtures replace live sandbox traffic. "
         f"Keep the dedupe rows for {ttl_old} hours and then delete them.",
         f"Agreed. The insert is the whole idempotency check: if it inserts a row we process the event, if the conflict clause swallows it we skip. This is the statement I'd use:\n\n```sql\n{sql}\n```\n\n"
@@ -101,13 +108,14 @@ def _coding_story(rng: random.Random) -> Dict[str, Any]:
         f"A simpler route is a module-level `ThreadPoolExecutor`: the handler verifies the signature, records the event id, submits the notification to the pool and returns 202 immediately. "
         "The cost is that queued work is lost if the process dies, but the carrier's own retry covers that gap now that duplicates are harmless."))
     beats.append((
-        f"Good, use ThreadPoolExecutor(max_workers={workers}) and return 202 right away; Celery is out because it needs a broker we don't have. "
+        (f"Good, use ThreadPoolExecutor(max_workers={workers}) and return 202 right away; Celery is out because it needs a broker we don't have. " if not v2 else
+         f"Good, {d2['rejected']} is out. {d2['decision']}: {d2['reason']}. ") +
         f"Also, I renamed {old_mod} to {new_mod} so it matches the blueprint name, and updated the import in app/__init__.py. "
         f"The signature check should reject timestamps older than {tol} seconds to stop replays.",
         f"Understood. I'll refer to {new_mod} from here on. The handler flow becomes: read raw body, verify the HMAC, reject if the timestamp is more than {tol} seconds old, insert the event id, "
         f"and only if the insert was new, submit `notify_customer` to the pool and return 202. Duplicates return 200 without notifying anyone, so the carrier stops retrying them."))
     beats.append((
-        f"One correction on retention: I checked the carrier's docs ({doc_url}) and they keep retrying for up to {ttl_new} hours, so {ttl_old} hours was too short. Please use {ttl_new} hours for the cleanup. "
+        f"One correction on retention: I checked the {docs_name} ({doc_url}) and they keep retrying for up to {ttl_new} hours, so {ttl_old} hours was too short. Please use {ttl_new} hours for the cleanup. "
         f"For the tests I run `{cmd}` and I follow the python-testing skill's conventions.",
         f"Thanks for catching that: with {ttl_old} hours a late retry could slip past cleanup and notify again. The cleanup interval becomes {ttl_new} hours, and I'll name the dedupe tests so that `-k dedupe` selects them. "
         "I'll keep to the python-testing conventions: one behaviour per test, fixtures from tests/fixtures/, no network."))
@@ -203,7 +211,7 @@ def _coding_story(rng: random.Random) -> Dict[str, Any]:
 
 # --------------------------------------------------------------------------- data analysis
 
-def _data_story(rng: random.Random) -> Dict[str, Any]:
+def _data_story(rng: random.Random, v2: bool = False) -> Dict[str, Any]:
     P = rng.choice(["churn-analysis", "retention-study", "subscriber-health", "lapse-model"])
     root = f"~/work/{P}"
     vendor = "~/Downloads/vendor_export/"
@@ -234,7 +242,7 @@ def _data_story(rng: random.Random) -> Dict[str, Any]:
     beats.append((
         f"I'm analysing why subscriber churn rose in Q3 for finance, who want an explanation by Friday. The project is {P} at {root}, branch {branch}, last commit {last_commit}. "
         f"The billing vendor sent three CSVs (subscriptions, payments, plans) that I downloaded into {vendor}. I already pulled the plans table through the Snowflake connector, and my first look is in {old_nb}. "
-        "I work in pandas and jupyter, and duckdb for quick joins. Where should we start?",
+        "I work in pandas and jupyter, and duckdb for quick joins" + (" (the database path is in the ANALYTICS_DB_PATH environment variable)" if v2 else "") + ". Where should we start?",
         "Start by getting the three tables into one place with a clear grain, one row per customer for the headline analysis, and by agreeing what 'churn' means, because every later number depends on it. "
         "Then a short EDA: tenure distribution, plan mix, and churn by signup month. Could you paste the column lists of the three CSVs?"))
     beats.append((
@@ -247,7 +255,8 @@ def _data_story(rng: random.Random) -> Dict[str, Any]:
         "Three candidates. (1) The cancel flag: easy and unambiguous, but it only captures customers who actively cancelled. (2) No successful payment for N days: it captures silent lapses, and N should match the billing cycle plus a grace period. "
         "(3) Downgrading to the free plan: a softer signal, better treated as a separate outcome. For a revenue question, option 2 usually tracks reality best."))
     beats.append((
-        f"Let's go with no successful payment for {gap} days. I don't want the cancel_flag column, because many customers just stop paying and never cancel. "
+        (f"Let's go with no successful payment for {gap} days. I don't want the cancel_flag column, because many customers just stop paying and never cancel. " if not v2 else
+         f"Let's go with this: {d1['decision'][0].lower() + d1['decision'][1:]}. I don't want {d1['rejected']}: {d1['reason']}. ") +
         f"I've copied the CSVs to data/raw/, so I'm done with {vendor}; ignore that downloads folder from now on, and I'm not going to open files in Excel any more. After dropping duplicates I have {fmt(n_old)} customers.",
         f"Good. With that definition a customer is churned on the first day their payment gap exceeds {gap} days. To get tenure, this is the line I'd use:\n\n```python\n{code}\n```\n\n"
         "Customers who have not churned are censored at AS_OF, which is why the fillna is there."))
@@ -256,7 +265,9 @@ def _data_story(rng: random.Random) -> Dict[str, Any]:
         "They often do score a little higher, but the gain is usually small on tabular data like this, and you pay for it in explainability. "
         "A logistic regression gives one coefficient per feature, and odds ratios that finance can read in a sentence. Given the audience, I would start with the logistic regression and only revisit trees if its fit is clearly poor."))
     beats.append((
-        f"Agreed: logistic regression, and no gradient-boosted trees, because finance needs coefficients they can read. I also renamed {old_nb} to {new_nb} so the notebooks sort in order.",
+        (f"Agreed: logistic regression, and no gradient-boosted trees, because finance needs coefficients they can read. " if not v2 else
+         f"Agreed: {d2['decision'][0].lower() + d2['decision'][1:]}, and no {d2['rejected']}: {d2['reason']}. ") +
+        f"I also renamed {old_nb} to {new_nb} so the notebooks sort in order.",
         f"Noted, I'll refer to {new_nb} from here on. The plan: build one feature table (tenure, plan, price, signup month, payment failures in the first 90 days), standardise the numeric columns on the training split, "
         "fit with an L2 penalty, and report odds ratios with confidence intervals."))
     beats.append((
@@ -354,13 +365,17 @@ def _data_story(rng: random.Random) -> Dict[str, Any]:
 
 # --------------------------------------------------------------------------- assembly
 
-def generate_scenario(task: str, length: int, seed: int) -> Dict[str, Any]:
+def generate_scenario(task: str, length: int, seed: int, version: str = DEFAULT_VERSION) -> Dict[str, Any]:
     if task not in TASKS:
         raise ValueError(f"unknown task type: {task!r}")
     if length not in LENGTHS:
         raise ValueError(f"unknown length: {length!r}")
+    if version not in VERSIONS:
+        raise ValueError(f"unknown version: {version!r} (valid versions: {', '.join(VERSIONS)})")
+    # the random stream is the same for every version, so v2 differs from v1 only where the text was fixed
     rng = random.Random(f"handover-v1|{seed}|{task}|{length}")
-    story = _coding_story(rng) if task == "coding" else _data_story(rng)
+    v2 = version == "handover-v2"
+    story = _coding_story(rng, v2) if task == "coding" else _data_story(rng, v2)
     beats: List[Pair] = story["beats"]
     n_pairs = length // 2
     n_fill = n_pairs - len(beats)
@@ -385,7 +400,7 @@ def generate_scenario(task: str, length: int, seed: int) -> Dict[str, Any]:
     corr = story["answer_key"]["correction"]
     first = lambda s: next(i for i, m in enumerate(messages) if s in m["content"])
     meta = dict(
-        seed=seed, task=task, length=length, generator="handover-v1",
+        seed=seed, task=task, length=length, generator=version,
         correction_old_index=first(corr["old"]), correction_new_index=beat_idx[6],
         rename_index=beat_idx[5], abandon_index=beat_idx[3], next_step_index=beat_idx[7],
         filler_indexes=filler_idx,
@@ -406,13 +421,52 @@ def render(scn: Dict[str, Any]) -> str:
     return json.dumps(scn, indent=2, ensure_ascii=False) + "\n"
 
 
-def generate_dataset(seed: int, out_dir) -> List[Path]:
+def check_scenario(scn: Dict[str, Any]) -> List[str]:
+    """Self-check: every fact the probes, answer key and manifest rely on must be stated in the chat.
+    Returns the missing items as ``"<where>: <text>"`` strings ([] when the chat states everything).
+    Matching is a case-insensitive substring search over the concatenated message texts."""
+    chat = "\n".join(m["content"] for m in scn["messages"]).lower()
+    missing: List[str] = []
+
+    def need(where: str, text: Any) -> None:
+        if isinstance(text, str) and text.strip() and text.strip().lower() not in chat:
+            item = f"{where}: {text.strip()}"
+            if item not in missing:
+                missing.append(item)
+
+    for i, p in enumerate(scn.get("probes", [])):
+        for f in p.get("key_facts", []):
+            need(f"probes[{i}].key_facts", f)
+    key = scn.get("answer_key") or {}
+    for i, d in enumerate(key.get("decisions", [])):
+        for field_ in ("decision", "reason", "rejected"):
+            need(f"answer_key.decisions[{i}].{field_}", d.get(field_))
+    for i, v in enumerate(key.get("verbatim", [])):
+        need(f"answer_key.verbatim[{i}]", v.get("text"))
+    corr = key.get("correction") or {}
+    need("answer_key.correction.old", corr.get("old"))
+    need("answer_key.correction.new", corr.get("new"))
+    ns = key.get("next_step") or {}
+    need("answer_key.next_step", ns.get("text"))
+    for t in ns.get("required_terms", []):
+        need("answer_key.next_step.required_terms", t)
+    for cat, items in (scn.get("environment") or {}).items():
+        for it in items:
+            need(f"environment.{cat}", it.get("path") or it.get("name"))
+            if cat == "references":
+                need("environment.references.url", it.get("url"))
+    for sv in scn.get("secret_values", []):
+        need("secret_values", sv)
+    return missing
+
+
+def generate_dataset(seed: int, out_dir, version: str = DEFAULT_VERSION) -> List[Path]:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     paths = []
     for task in TASKS:
         for length in LENGTHS:
-            scn = generate_scenario(task, length, seed)
+            scn = generate_scenario(task, length, seed, version)
             p = out / f"{task}-{length}.json"
             p.write_text(render(scn), encoding="utf-8")
             paths.append(p)

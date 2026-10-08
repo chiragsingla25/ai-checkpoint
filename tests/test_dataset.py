@@ -179,3 +179,75 @@ def test_generate_needs_no_model_or_network(tmp_path):
     r = subprocess.run([sys.executable, "-m", "ai_checkpoint.eval", "generate", "--seed", "7", "--out", str(tmp_path)],
                        capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"})
     assert r.returncode == 0, r.stderr
+
+
+# ------------------------------------------------------------------ F-003: self-check and handover-v2
+from ai_checkpoint.eval.generate import VERSIONS, check_scenario  # noqa: E402
+
+DATASET_V2 = ROOT / "datasets" / "handover-v2"
+
+
+def _gen(name, version):
+    t, n = name.rsplit("-", 1)
+    return json.loads(render(generate_scenario(t, int(n), SEED, version)))
+
+
+def test_self_check_catches_v1_bugs():
+    for name in NAMES:
+        missing = check_scenario(_gen(name, "handover-v1"))
+        assert missing, name
+        text = "\n".join(missing)
+        if name.startswith("data_analysis"):
+            assert "ANALYTICS_DB_PATH" in text
+        else:
+            assert "Carrier webhook docs" in text
+    # also works on the committed file
+    assert check_scenario(json.loads((DATASET / "coding-20.json").read_text()))
+
+
+def test_self_check_detects_missing_items():
+    scn = _gen("coding-20", "handover-v2")
+    assert check_scenario(scn) == []
+    bad = json.loads(json.dumps(scn))
+    for m in bad["messages"]:
+        m["content"] = m["content"].replace(bad["secret_values"][0], "XXX")
+    assert any("secret_values" in x for x in check_scenario(bad))
+
+
+def test_v2_scenarios_pass_self_check_and_state_key_phrases():
+    phrases = {
+        "data_analysis": ["ANALYTICS_DB_PATH",
+                          "finance needs coefficients they can read and explain, and a more complex model would add little"],
+        "coding": ["Carrier webhook docs", "a thread pool needs no new infrastructure"],
+    }
+    for name in NAMES:
+        scn = _gen(name, "handover-v2")
+        assert check_scenario(scn) == [], name
+        chat = "\n".join(m["content"] for m in scn["messages"])
+        for ph in phrases[name.rsplit("-", 1)[0]]:
+            assert ph in chat, (name, ph)
+        assert scn["meta"]["generator"] == "handover-v2"
+        parse_scenario(scn)
+
+
+def test_v2_committed_dataset_is_byte_identical_and_documented(tmp_path):
+    readme = (DATASET_V2 / "README.md").read_text()
+    assert "--seed 7" in readme and "--version handover-v2" in readme and "checkpoint-eval generate" in readme
+    assert main(["generate", "--seed", "7", "--version", "handover-v2", "--out", str(tmp_path)]) == 0
+    for n in NAMES:
+        assert (DATASET_V2 / f"{n}.json").read_bytes() == (tmp_path / f"{n}.json").read_bytes()
+    assert sorted(p.name for p in DATASET_V2.glob("*.json")) == sorted(n + ".json" for n in NAMES)
+
+
+def test_v1_reproducible_with_version_flag_and_bogus_version(tmp_path, capsys):
+    assert main(["generate", "--seed", "7", "--version", "handover-v1", "--out", str(tmp_path)]) == 0
+    for n in NAMES:
+        assert (DATASET / f"{n}.json").read_bytes() == (tmp_path / f"{n}.json").read_bytes()
+    with pytest.raises(SystemExit) as e:
+        main(["generate", "--version", "bogus", "--out", str(tmp_path / "x")])
+    assert e.value.code != 0
+    err = capsys.readouterr().err
+    assert "handover-v1" in err and "handover-v2" in err
+    with pytest.raises(ValueError, match="handover-v2"):
+        generate_scenario("coding", 20, 7, "bogus")
+    assert VERSIONS == ("handover-v1", "handover-v2")

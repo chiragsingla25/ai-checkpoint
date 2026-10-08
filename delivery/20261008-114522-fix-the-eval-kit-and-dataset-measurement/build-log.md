@@ -25,3 +25,14 @@
 - Tests: `$HOME/aic-venv/bin/python -m pytest -q` -> 302 passed (all offline).
 - User-visible changes: a retried call prints an extra progress line "(<variant>, retry)" and the total grows from 8 to 9 from that point (the earlier lines already printed keep "/8"); a mismatch can now cost one extra model call.
 - Notes: unparseable JSON is not retried. If the retry call itself fails (CallFailed after its own 2 attempts) the first reply's count error is recorded instead of failing the variant. A retry also counts toward --workers limits as a normal call.
+
+## F-003 attempt 1
+- What changed:
+  - src/ai_checkpoint/eval/generate.py: `VERSIONS`, `check_scenario(scn)` (case-insensitive substring self-check of probe key_facts, decision/reason/rejected, verbatim, correction, next step and required terms, manifest keys and reference urls, env var names, secrets); `generate_scenario/generate_dataset(..., version)`; the two story builders take `v2` and, only for handover-v2, state the decision, its rejected option and its reason in the chat in the answer key's words, say "Carrier webhook docs" and mention `ANALYTICS_DB_PATH`. The random stream is shared by both versions, so v2 has the same projects, numbers and filler as v1; `meta.generator` is the version.
+  - src/ai_checkpoint/eval/cli.py: `generate --version {handover-v1,handover-v2}`; a bogus value exits 2 listing the valid versions.
+  - datasets/handover-v2/ (6 scenarios + README.md with seed 7 and the regenerate command).
+  - tests/test_dataset.py: new tests (self-check on v1 finds ANALYTICS_DB_PATH / Carrier webhook docs; v2 self-check is []; key phrases; v2 byte-identical regeneration; v1 reproducible with the flag; bogus version).
+- How to run it: `checkpoint-eval generate --seed 7 --version handover-v2 --out datasets/handover-v2`
+- Tests: `$HOME/aic-venv/bin/python -m pytest -q` -> 307 passed, offline. `git diff --stat` for datasets/handover-v1 and for src/ai_checkpoint outside eval/ is empty.
+- User-visible changes: new `--version` option on `generate`.
+- Notes: the CLI default stays handover-v1 (intake suggested v2) because the existing byte-identical test calls `generate` without --version and had to pass unchanged; flipping the default is a one-line change plus that test. v2 decision sentences are quoted verbatim in the chat (lower-cased first letter), which reads slightly formal but passes the literal self-check.

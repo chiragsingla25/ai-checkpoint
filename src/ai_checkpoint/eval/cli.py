@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from ..errors import CheckpointError
-from .generate import generate_dataset
+from .generate import DEFAULT_VERSION, VERSIONS, generate_dataset
 from .models import DEFAULT_MODELS, DEFAULT_TIMEOUT, MODEL_CHOICES, MODEL_ENV, make_model
 from .pipeline import run_scenario
 from .report import markdown_table, write_outputs
@@ -79,6 +79,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="literal required terms for next-step scoring")
     g = sub.add_parser("generate", help="generate the handover dataset (6 scenario files; no model needed)")
     g.add_argument("--seed", type=int, default=7, help="integer seed (default 7; the committed dataset uses 7)")
+    g.add_argument("--version", choices=VERSIONS, default=DEFAULT_VERSION,
+                   help="dataset version: " + ", ".join(VERSIONS) + f" (default {DEFAULT_VERSION}, the first run's dataset; "
+                   "handover-v2 states every key fact in the chat)")
     g.add_argument("--out", required=True, help="output directory (created if missing)")
     return p
 
@@ -89,7 +92,7 @@ def _generate(args) -> int:
         print(f"error: --out {out} exists and is not a directory", file=sys.stderr)
         return 1
     try:
-        paths = generate_dataset(args.seed, out)
+        paths = generate_dataset(args.seed, out, args.version)
     except OSError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
