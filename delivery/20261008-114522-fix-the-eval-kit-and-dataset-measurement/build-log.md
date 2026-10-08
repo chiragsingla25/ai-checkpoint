@@ -18,3 +18,10 @@
 - Tests: `$HOME/aic-venv/bin/python -m pytest -q` -> 296 passed. New test_stale_old_value_asserted_as_current_despite_new_mentioned covers QA's cases plus negation/adversarial ones; all 17 real Haiku answers still 0.
 - User-visible changes: none beyond attempt 1 (stale scoring is stricter about history vs assertion).
 - Notes: known heuristic limits listed in the docstring (cue anywhere in a clause marks the whole clause as history; source-attributed values count as asserted; English cues only).
+
+## F-002 attempt 1
+- What changed: src/ai_checkpoint/eval/pipeline.py: new `_list_with_count_retry` used by answer_probes and judge_answers (wrong item count -> one retry whose messages are the original request, the first reply as assistant turn, and a short user instruction naming the expected count; still wrong -> the existing "expected N answers/verdicts, got M" errors with M from the retry); `Caller.expect_extra_call()` bumps the progress total so the retry shows as [k/total+1]. tests/test_retry.py (new).
+- How to run it: automatic in `checkpoint-eval run/suite`.
+- Tests: `$HOME/aic-venv/bin/python -m pytest -q` -> 302 passed (all offline).
+- User-visible changes: a retried call prints an extra progress line "(<variant>, retry)" and the total grows from 8 to 9 from that point (the earlier lines already printed keep "/8"); a mismatch can now cost one extra model call.
+- Notes: unparseable JSON is not retried. If the retry call itself fails (CallFailed after its own 2 attempts) the first reply's count error is recorded instead of failing the variant. A retry also counts toward --workers limits as a normal call.

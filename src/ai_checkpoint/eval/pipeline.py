@@ -128,6 +128,11 @@ class Caller:
             print(f"[{self.scenario}] {label} [{self.count}/{self.total}] {time.monotonic() - self.t0:.1f}s{note}",
                   file=self.progress, flush=True)
 
+    def expect_extra_call(self) -> None:
+        """Announce one more call than planned (a corrective retry) so the [n/total] counter stays right."""
+        with _PROGRESS_LOCK:
+            self.total += 1
+
     def _attempt(self, system: str, messages: List[dict]) -> str:
         if self.limiter is None:
             return call_with_timeout(self.model, system, messages, self.timeout)
@@ -147,6 +152,40 @@ class Caller:
         kind = "timeout" if isinstance(last, CallTimeout) else "error"
         self._say(stage, detail, f" FAILED after 2 attempts ({kind})")
         raise CallFailed(f"{stage} call failed after 2 attempts: {last}") from None
+
+
+def _list_with_count_retry(caller: "Caller", stage: str, system: str, user: str, detail: str, n: int,
+                           what: str, shape: str):
+    """Call, parse a JSON array and, if it has the wrong number of items, retry ONCE with the first reply
+    and a short corrective instruction. Returns (items, error): `items` is the list (right count) or None,
+    `error` the message to record when `items` is None. Unparseable replies are not retried; if the retry
+    call itself fails, the first reply's count error stands."""
+    messages = [{"role": "user", "content": user}]
+    raw = caller.call(stage, system, messages, detail)
+    try:
+        items = extract_json_list(raw)
+    except (ValueError, RecursionError) as e:
+        return None, f"{stage} reply unusable: {e}"
+    if len(items) == n:
+        return items, ""
+    first_err = f"{stage} reply unusable: expected {n} {what}, got {len(items)}"
+    messages = messages + [
+        {"role": "assistant", "content": raw},
+        {"role": "user", "content": f"Your reply had {len(items)} entries but exactly {n} are expected "
+                                    f"(one per item in the same order). Reply again with ONLY a JSON array "
+                                    f"of exactly {n} {shape}."}]
+    caller.expect_extra_call()
+    try:
+        raw2 = caller.call(stage, system, messages, f"{detail}, retry" if detail else "retry")
+    except CallFailed:
+        return None, first_err
+    try:
+        items = extract_json_list(raw2)
+    except (ValueError, RecursionError) as e:
+        return None, f"{stage} reply unusable: {e}"
+    if len(items) != n:
+        return None, f"{stage} reply unusable: expected {n} {what}, got {len(items)}"
+    return items, ""
 
 
 def _compaction_handover(scenario: Scenario, model: Model, caller: Optional[Caller] = None):
@@ -215,13 +254,10 @@ def answer_probes(caller: Caller, handover: str, probes: List[Probe], detail: st
     Returns one entry per probe: the answer text, or an error string wrapped as ("error", msg)."""
     n = len(probes)
     user = json.dumps({"questions": [p.question for p in probes]}, ensure_ascii=False)
-    raw = caller.call("answer", ANSWER_SYSTEM + handover, [{"role": "user", "content": user}], detail)
-    try:
-        items = extract_json_list(raw)
-    except (ValueError, RecursionError) as e:
-        return [("error", f"answer reply unusable: {e}")] * n
-    if len(items) != n:
-        return [("error", f"answer reply unusable: expected {n} answers, got {len(items)}")] * n
+    items, err = _list_with_count_retry(caller, "answer", ANSWER_SYSTEM + handover, user, detail, n,
+                                        "answers", "strings")
+    if items is None:
+        return [("error", err)] * n
     out: List[Any] = []
     for it in items:
         if isinstance(it, dict) and isinstance(it.get("answer"), str):
@@ -253,13 +289,10 @@ def judge_answers(caller: Caller, probes: List[Probe], answers: List[str], detai
         {"question": p.question, "reference": p.reference, "key_facts": p.key_facts,
          "must_not_contradict": p.must_not_contradict, "known_wrong": p.known_wrong, "answer": a}
         for p, a in zip(probes, answers)]}, ensure_ascii=False)
-    raw = caller.call("judge", JUDGE_SYSTEM, [{"role": "user", "content": payload}], detail)
-    try:
-        items = extract_json_list(raw)
-    except (ValueError, RecursionError) as e:
-        return bad(f"judge reply unusable: {e}")
-    if len(items) != n:
-        return bad(f"judge reply unusable: expected {n} verdicts, got {len(items)}")
+    items, err = _list_with_count_retry(caller, "judge", JUDGE_SYSTEM, payload, detail, n, "verdicts",
+                                        "verdict objects")
+    if items is None:
+        return bad(err)
     out = []
     for p, d in zip(probes, items):
         try:
