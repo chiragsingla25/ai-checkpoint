@@ -355,8 +355,12 @@ def test_api_failure_is_a_clean_model_error(monkeypatch):
 # gained `decisions[].rejected` and the `workspace` section: the description now asks the saving
 # AI to record rejected alternatives and to fill `workspace` (judge each item still_relevant /
 # done_with, env var names only, never values).
-_HEAD_SAVE_DESCRIPTION_SHA256 = "0b89d3ba57a215624aec5ba26502f4ce2bf3c77782d56bcb8c98660ce3641bc4"
-_HEAD_SAVE_DESCRIPTION_LEN = 2279
+# Deliberately updated again (was sha 0b89d3ba..., len 2279) to close three gaps measured in
+# eval-runs/2026-10-09-handover-v2-haiku: the user's own plan must lead next_steps (marker
+# "User's plan:"), done_with workspace items must be listed, and every decision with discussed
+# alternatives must fill `rejected`.
+_HEAD_SAVE_DESCRIPTION_SHA256 = "3d9a427f1682e0ac158006e898417dc99b35d908347ac9aac16461d98a34c6a8"
+_HEAD_SAVE_DESCRIPTION_LEN = 2829
 
 
 def test_save_description_matches_committed_head_text():
@@ -366,7 +370,7 @@ def test_save_description_matches_committed_head_text():
     assert len(raw) == _HEAD_SAVE_DESCRIPTION_LEN
     assert hashlib.sha256(raw).hexdigest() == _HEAD_SAVE_DESCRIPTION_SHA256
     # the paragraph break the QA found missing
-    assert "can follow without asking.\n\nPick a short, descriptive `checkpoint_name`" in SAVE_DESCRIPTION
+    assert 'do not write "User\'s plan:".\n\nPick a short, descriptive `checkpoint_name`' in SAVE_DESCRIPTION
 
 
 def test_registered_save_tool_description_matches_head_hash():
@@ -391,3 +395,20 @@ def test_deeply_nested_compaction_reply_is_recorded_not_raised():
     out = build_handovers(parse_scenario(good_scenario(), default_name="x"), Deep())
     assert out["checkpoint"]["handover"] is None
     assert "compaction output" in out["checkpoint"]["error"]
+
+
+def test_save_instructions_carry_the_three_rules():
+    from ai_checkpoint.schema import FIELD_DESCRIPTIONS, SAVE_INSTRUCTIONS, compaction_system_prompt
+
+    t = SAVE_INSTRUCTIONS
+    assert "user's own words" in t and "in order" in t and "`next_steps`" in t
+    assert '"User\'s plan:"' in t
+    for w in ("done_with", "full path", "rename", "env var"):
+        assert w in t
+    assert "every decision" in t.lower() and "even when" in t and "`rejected`" in t
+    assert "User's plan:" in FIELD_DESCRIPTIONS["next_steps"]
+    assert "done-with" in FIELD_DESCRIPTIONS["workspace"]
+    assert "every alternative discussed" in FIELD_DESCRIPTIONS["decisions.rejected"]
+    prompt = compaction_system_prompt()
+    for phrase in ("User's plan:", "full path", "EVERY decision"):
+        assert phrase in prompt

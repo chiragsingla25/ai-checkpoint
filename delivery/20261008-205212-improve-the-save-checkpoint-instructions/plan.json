@@ -1,0 +1,19 @@
+{
+  "order": [
+    "intake",
+    "build",
+    "qa"
+  ],
+  "skipped": [],
+  "per_feature": [
+    "build",
+    "qa"
+  ],
+  "agents": {
+    "intake": "consultancy:intake",
+    "build": "consultancy:builder",
+    "qa": "consultancy:qa"
+  },
+  "reason": "Product instruction change; QA confirms old checkpoints and the tool contract are untouched.",
+  "created": "2026-10-08T20:54:04"
+}

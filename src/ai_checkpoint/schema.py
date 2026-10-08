@@ -24,16 +24,21 @@ questions are not reopened.
 - Never invent anything. If something was not said or decided in the conversation, leave it \
 out or list it under `open_questions`. Do not guess file contents, numbers or intentions.
 - Do not include secrets (API keys, passwords, tokens); describe where they live instead.
-- For each decision, list in `rejected` the alternatives that were turned down and how far \
-each got (discussed, prototyped, built_then_removed), so the next chat can say whether X was \
-ever tried.
+- For EVERY decision where alternatives were discussed, list each one in `rejected` with how \
+far it got (discussed, prototyped, built_then_removed), even when the reason is short or the \
+option was only mentioned. Leave `rejected` empty only if no alternative came up.
 - Fill `workspace` with the environment the work used: folders and files, repos (branch and \
 last commit), access that had to be granted, connectors or MCP servers, tools and setup, \
 env var NAMES, skills/plugins/agents and external references. Judge each item: mark it \
-`still_relevant` if the work will need it again, `done_with` if not. Give env var names \
-only, never their values, and no credential paths.
+`still_relevant` if the work will need it again, `done_with` if not. List `done_with` items \
+too; do not leave them out. Examples: an abandoned folder (give its full path), an old file \
+name after a rename, a connector or tool no longer used, an env var NAME that was used. Give \
+env var names only, never their values, and no credential paths.
 - `current_step` is the exact step the chat was on at this moment, and `next_steps` are \
-ordered, concrete instructions the next AI can follow without asking.
+ordered, concrete instructions the next AI can follow without asking. If the user stated \
+their own plan for what comes next, `next_steps` must START with that plan: the user's own \
+words, every part, in order, each step beginning with the exact text "User's plan:". Then add \
+your own steps. If the user gave no plan, do not write "User's plan:".
 
 Pick a short, descriptive `checkpoint_name` (for example "forecasting-v2").\
 """
@@ -53,7 +58,11 @@ FIELD_DESCRIPTIONS = {
     "checkpoint_name": "Short name for this restore point, e.g. 'forecasting-v2'.",
     "objective": "What the work is for: the goal this whole chat is serving.",
     "current_step": "The exact step the chat was on when saved: what was being done, and how far it got.",
-    "next_steps": "Ordered, concrete instructions for continuing from the current step. At least one.",
+    "next_steps": (
+        "Ordered, concrete instructions for continuing from the current step. At least one. "
+        "If the user stated their own plan, it comes first, in their words and in order, each "
+        "step starting with \"User's plan:\"; your own steps come after."
+    ),
     "context": "Background facts, constraints, environment and preferences the user stated that the next AI must respect.",
     "decisions": (
         "Each decision made, with its reason, so settled questions are not reopened. "
@@ -62,7 +71,8 @@ FIELD_DESCRIPTIONS = {
     "decisions.decision": "What was decided, stated plainly.",
     "decisions.reason": "Why it was decided, including options that were rejected.",
     "decisions.rejected": (
-        "Optional. Alternatives that were considered and rejected for this decision, each as "
+        "`rejected` must hold every alternative discussed for this decision, even when the reason is "
+        "short; empty only if none came up. Each as "
         "{option, how_far, note?}. `how_far` is how far it got: \"discussed\" (only talked about), "
         "\"prototyped\" (a trial or spike was made) or \"built_then_removed\" (fully built, then "
         "taken out). `note` is an optional short remark. This lets the next chat answer "
@@ -79,7 +89,8 @@ FIELD_DESCRIPTIONS = {
         "Optional. The environment the work depended on, as an object of lists: files, repos, "
         "access, connectors, tools, env_vars, skills, references. Every item has a `status` of "
         "\"still_relevant\" or \"done_with\"; judge each one. Only still-relevant items are "
-        "shown to the next chat as a 'Set up first' checklist. Env var names only, never values."
+        "shown to the next chat as a 'Set up first' checklist, but done-with items must be listed too, "
+        "not dropped. Env var names only, never values."
     ),
     "workspace.files": "Files or folders worked with: {path, note?, status}. Key files to open first.",
     "workspace.repos": "Repos: {path, branch?, last_commit?, note?, status}. Branch and last commit at save time.",
