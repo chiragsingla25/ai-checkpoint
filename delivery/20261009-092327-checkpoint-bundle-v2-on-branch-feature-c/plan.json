@@ -1,0 +1,19 @@
+{
+  "order": [
+    "intake",
+    "build",
+    "qa"
+  ],
+  "skipped": [],
+  "per_feature": [
+    "build",
+    "qa"
+  ],
+  "agents": {
+    "intake": "consultancy:intake",
+    "build": "consultancy:builder",
+    "qa": "consultancy:qa"
+  },
+  "reason": "Large product change to storage, save tool and brief; each feature needs independent QA and a regression sweep against old checkpoints.",
+  "created": "2026-10-09T09:38:32"
+}

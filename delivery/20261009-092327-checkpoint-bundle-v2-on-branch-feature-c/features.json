@@ -1,0 +1,80 @@
+[
+  {
+    "id": "F-001",
+    "title": "Design doc for checkpoint bundle v2",
+    "acceptance": [
+      "`docs/DESIGN-v2.md` exists and has sections for: bundle layout, each bundle file's schema, events.jsonl, save_checkpoint input (new structured fields and which old fields stay accepted), save-time checks with their exact error messages, next-action rule, brief layout, carry-forward by task id, old-format compatibility, eval changes, out of scope",
+      "The layout section names every path in the request: `~/.ai-checkpoint/chats/<chat>/checkpoints/cp-NNN/` with manifest.json, plan.json, decisions.jsonl, facts.jsonl, workspace.json, user_turns.jsonl, verbatim/, open_questions.json, brief.md, and `chats/<chat>/events.jsonl`",
+      "The doc states how `<chat>` is turned into a folder name (chat names that differ only in case, contain spaces or non-ASCII) and that cp-NNN ids are global and sequential across chats and old flat files",
+      "The doc states the next-action rule as: first task in `order` whose status is todo and whose `depends_on` are all done; and what happens when none qualifies",
+      "Out-of-scope list includes SQLite index/ask_checkpoint, embeddings, MCP sampling, online backends; `git diff --stat` for this feature touches only docs/"
+    ]
+  },
+  {
+    "id": "F-002",
+    "title": "Bundle storage with manifest, events log and old-format compatibility",
+    "acceptance": [
+      "A save through `GitStore(tmp).save(...)` with today's (old-style) fields creates `chats/<chat>/checkpoints/cp-001/` containing manifest.json, plan.json, decisions.jsonl, facts.jsonl, workspace.json, user_turns.jsonl, verbatim/, open_questions.json and brief.md, and makes exactly one new git commit containing only that folder and the chat's events.jsonl",
+      "manifest.json holds id, resumed_from (or null), created_at, client, and a sha256 for every other file in the bundle; recomputing sha256 of each file matches the manifest",
+      "Each verbatim item is written as a real file under verbatim/ whose bytes equal the saved text exactly (test with tabs, trailing spaces, CRLF, backticks and non-ASCII); two items with the same label do not overwrite each other",
+      "`chats/<chat>/events.jsonl` gains exactly one appended line per save (earlier lines unchanged byte for byte) naming the checkpoint id and event type",
+      "With an existing old flat `checkpoints/cp-003.json` in the store, the next save gets id cp-004; `get`, `list`, `resolve` (by id, name, chat/name) and renumbering ('name (1)') work across a mix of old flat files and bundles",
+      "Golden test: loading tests/fixtures/old_format_cp.json from a store and calling resume_checkpoint returns text byte-identical to tests/fixtures/old_format_brief.golden.md; old files are never rewritten or moved (file hash unchanged after further saves)",
+      "Secrets in any field (e.g. `sk-...` key, `password=...`, bearer token, URL credentials) do not appear in any bundle file, events.jsonl, or the commit message (grep of the store's working tree and `git log -p` finds none)",
+      "If git commit fails, the new bundle folder is removed and events.jsonl is unchanged; a corrupt bundle (bad JSON in plan.json) is skipped by list without crashing",
+      "`$HOME/aic-venv/bin/python -m pytest -q` passes with at least the previous 308 tests (existing tests updated only where the on-disk path is asserted)"
+    ]
+  },
+  {
+    "id": "F-003",
+    "title": "Structured plan, computed next action, v2 brief and save echo",
+    "acceptance": [
+      "save_checkpoint (MCP tool and GitStore.save) accepts new optional fields: tasks (text, status todo|in_progress|done, from user|ai, quote, depends_on, order), decisions with status/supersedes, facts (key, value, valid_from, superseded_by), user_turns, open_questions with waiting_on_user; a call with only the old fields still succeeds",
+      "The server assigns task ids (t-1, t-2, ... in order) and writes them to plan.json; client-supplied ids on a fresh plan are ignored or rejected as documented",
+      "Next action = first task by order with status todo whose depends_on are all done; test: t-1 done, t-2 todo depends_on [t-3], t-3 todo -> next action is t-3; an in_progress task is preferred if the design says so, and this is tested",
+      "depends_on naming an unknown task or forming a cycle returns a clear validation error and writes nothing",
+      "brief.md (and resume_checkpoint output) opens with a 'Next action' section naming the computed task, followed by the user's own plan (from=user tasks with their quotes) before AI tasks",
+      "Brief includes a 'No longer needed' section listing workspace items with status done_with; the section is omitted when there are none",
+      "When only old fields are given, next_steps become tasks (lines starting \"User's plan:\" become from=user) so the brief still opens with 'Next action'",
+      "The save result includes the text `Next action saved: <task text>. Correct?` with the computed task",
+      "brief.md is regenerated from the other files: deleting brief.md and calling resume returns the same text"
+    ]
+  },
+  {
+    "id": "F-004",
+    "title": "Save-time code checks returned as fixable errors",
+    "acceptance": [
+      "A from=user task whose quote does not match any user_turns entry or last_exchange.user (matching is case-, whitespace- and punctuation-insensitive per decisions.md ruling 2) is rejected; the error names the task and the quote, and nothing is written (no folder, no commit, no events line)",
+      "Matching tolerates case, whitespace and punctuation differences but not different words: a test pins one accepted variant (e.g. extra spaces/capitals) and one rejected variant (a changed word)",
+      "A plan whose tasks are all done (or empty) is rejected with an error saying at least one unfinished task is needed",
+      "No free-text heuristic check on decision reasons (dropped in the F-001 amendment): a decision with empty rejected is accepted; checks apply only to decisions and tasks that are new or changed in this save, never to items carried forward unchanged from the parent (test with a parent whose decision has empty rejected)",
+      "All failing checks are reported together in one error (not first-only), and the MCP tool returns them as an error result the chat model can read",
+      "A valid save passes all checks; old-field-only saves are not rejected by checks that need new fields (documented which checks apply)",
+      "Secrets in quotes/user_turns are redacted before the verbatim-quote check, and the check does not fail merely because redaction changed both sides equally"
+    ]
+  },
+  {
+    "id": "F-005",
+    "title": "Carry-forward plan updates by task id from a resumed chat",
+    "acceptance": [
+      "The brief of a bundle checkpoint shows each task's id (e.g. `[t-2]`)",
+      "save with resumed_from=cp-001 and plan_updates [{id: t-2, status: done}, {text: 'new task', from: ai}] produces a plan.json that keeps all parent tasks (ids, quotes, order) with t-2 done and a new task with the next unused id",
+      "An update naming an unknown task id returns a validation error naming the id; nothing is written",
+      "Unmentioned parent decisions, facts, workspace and user_turns are carried forward unless replaced; the events.jsonl line records resumed_from",
+      "plan_updates without resumed_from returns a clear error; resumed_from pointing at an old flat checkpoint converts its next_steps into tasks first, then applies updates",
+      "The computed next action and the save echo reflect the updated plan"
+    ]
+  },
+  {
+    "id": "F-006",
+    "title": "Eval support for the bundle path (offline)",
+    "acceptance": [
+      "compaction_system_prompt() describes the new structured fields from the same schema source as the MCP tool (a test asserts the tool's field descriptions appear in the prompt)",
+      "The eval checkpoint handover builds the brief through the bundle path (store save into a temp dir, then resume), and records save-check errors in the result instead of aborting",
+      "FakeModel's compaction output uses the new fields (tasks with from=user quotes taken verbatim from the transcript, user_turns, workspace with done_with items) and passes the save checks",
+      "`checkpoint-eval suite datasets/handover-v2/*.json --model fake --out <tmp>` completes offline with no API key and no network, writing results.json and results.md for all 6 scenarios with a checkpoint handover for each",
+      "Old-format path stays available (flag or mode) so previous runs can be reproduced; existing eval tests pass",
+      "eval-runs/README.md documents how to run v2 for real; the real-model target (next step >=90%, key-fact recall >=88%) is recorded as a separate manual run, not an offline test"
+    ]
+  }
+]
