@@ -12,3 +12,17 @@
 - Tests: none (docs only).
 - User-visible changes: None.
 - Notes: F-004 acceptance criterion about decisions with empty rejected is superseded by this amendment (no code check); flag to orchestrator so QA does not expect it.
+
+## F-002 attempt 1
+- What changed: src/ai_checkpoint/bundle.py (new: chat_key/chat_folder, verbatim file names, old next_steps<->tasks conversion, next_action rule, write_bundle/read_bundle); src/ai_checkpoint/store.py (saves write chats/<chat>/checkpoints/cp-NNN/ + chats/<chat>/chat.json (first save) + events.jsonl in one commit; ids = max over flat files, bundle folders and git history of both layouts; get/list/resolve/renumbering read flat files and bundles; rollback removes new files and restores events.jsonl; corrupt bundles skipped); tests/test_bundle.py (new, 14 tests); tests/disk.py (helpers); on-disk path assertions updated in tests/test_store.py, test_windows_sim.py, test_rejected.py, test_workspace.py.
+- How to run it: from code, GitStore(root).save({...old fields...}); bundle appears under <root>/chats/<slug>-<hash8>/checkpoints/cp-NNN/.
+- Tests: `$HOME/aic-venv/bin/python -m pytest -q` -> 321 pass, 1 fail: tests/test_metrics.py::test_product_code_unchanged, which fails only because it checks that src/ai_checkpoint has no uncommitted changes outside eval/ (git status); it will pass once the orchestrator commits (same as the other features that touch product code). Not edited.
+- User-visible changes: new on-disk layout for every new save (chats/<chat>/checkpoints/cp-NNN/ instead of checkpoints/cp-NNN.json); a chat.json and events.jsonl per chat; resume output for new saves is unchanged (still the old brief, v2 brief comes in F-003); old flat files untouched.
+- Notes: scope calls: (1) bundle brief.md is rendered with the existing render_brief (F-003 replaces it); (2) tasks/plan.json/user_turns derived from old fields per DESIGN section 12 and next_action pure function already added since events.jsonl records it (F-003 builds on it, no structured input yet); (3) the flat view rebuilds next_steps as "User's plan: <text>" with one space, so a step saved as "User's plan:foo" reads back as "User's plan: foo"; (4) manifest sha256s are written but not verified on load; (5) get_checkpoint still returns only the flat view (both shapes is F-003).
+
+## F-002 attempt 2
+- What changed: bundle.py (derived user tasks keep the original step text in a `raw` field, used by the flat view; text/quote still drop the prefix; `verbatim/.keep` empty file added to every bundle and hashed in the manifest); store.py (removed the no-op stat in _rollback); tests/test_bundle.py (round-trip tests for no space, two spaces, tab and normal space after "User's plan:", empty-verbatim .keep test, existing tests list .keep); docs/DESIGN-v2.md (two one-line notes: `.keep` in the layout, `raw` in section 12).
+- How to run it: as attempt 1.
+- Tests: `$HOME/aic-venv/bin/python -m pytest -q` -> 326 pass, 1 fail (test_metrics.py::test_product_code_unchanged, uncommitted product code; passes after commit).
+- User-visible changes: None beyond attempt 1 (steps now read back exactly as saved; bundles gain a verbatim/.keep file and one more entry in manifest.files).
+- Notes: the plan.json task for a user step now has an extra `raw` key; later features should preserve it on carry-forward.

@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from disk import cp_path, disk_text, remove_cp, tree_bytes
 
 import ai_checkpoint
 from ai_checkpoint import GitStore, NotFoundError, ValidationError, default_root
@@ -37,7 +38,7 @@ def test_core_imports_no_third_party():
 # --- AC2: keys --------------------------------------------------------------
 def test_saved_file_has_every_key(store, valid):
     res = store.save(valid)
-    data = json.loads(store.path_for(res.checkpoint_id).read_text())
+    data = store.get(res.checkpoint_id).to_dict()
     for key in ["objective", "context", "decisions", "completed", "current_step",
                 "next_steps", "open_questions", "verbatim", "last_exchange",
                 "notes_for_next_ai", "chat_name", "checkpoint_name", "checkpoint_id",
@@ -51,7 +52,7 @@ def test_saved_file_has_every_key(store, valid):
 def test_minimal_save_fills_defaults(store):
     res = store.save({"chat_name": "c", "checkpoint_name": "n", "objective": "o",
                       "current_step": "s", "next_steps": ["a"]})
-    data = json.loads(store.path_for(res.checkpoint_id).read_text())
+    data = store.get(res.checkpoint_id).to_dict()
     assert data["client"] == "unknown" and data["resumed_from"] is None
     assert data["verbatim"] == [] and data["last_exchange"] == {"user": "", "assistant": ""}
 
@@ -68,7 +69,7 @@ def test_env_home_save_writes_only_there(isolated_home, monkeypatch, tmp_path, v
     target = tmp_path / "elsewhere"
     monkeypatch.setenv("AI_CHECKPOINT_HOME", str(target))
     GitStore().save(valid)
-    assert (target / "checkpoints" / "cp-001.json").is_file()
+    assert list(target.glob("chats/*/checkpoints/cp-001/manifest.json"))
     assert list(isolated_home.iterdir()) == []
 
 
@@ -87,23 +88,23 @@ def test_one_commit_per_save(store, valid, root):
 # --- AC5: ids ---------------------------------------------------------------
 def test_ids_sequential_and_never_reused(store, valid):
     assert [save(store, valid).checkpoint_id for _ in range(2)] == ["cp-001", "cp-002"]
-    store.path_for("cp-002").unlink()
+    remove_cp(store, "cp-002")
     assert save(store, valid).checkpoint_id == "cp-003"
 
 
 def test_ids_not_reused_when_all_deleted(store, valid):
     save(store, valid)
-    store.path_for("cp-001").unlink()
+    remove_cp(store, "cp-001")
     assert save(store, valid).checkpoint_id == "cp-002"
 
 
 # --- AC6: immutability ------------------------------------------------------
 def test_same_name_creates_new_id_and_resolves_newest(store, valid):
     a = save(store, valid, objective="first")
-    before = store.path_for(a.checkpoint_id).read_bytes()
+    before = tree_bytes(cp_path(store, a.checkpoint_id))
     b = save(store, valid, objective="second")
     assert a.checkpoint_id != b.checkpoint_id
-    assert store.path_for(a.checkpoint_id).read_bytes() == before
+    assert tree_bytes(cp_path(store, a.checkpoint_id)) == before
     # Behaviour change: a same-name save in the same chat is renumbered ("v1 (1)"),
     # so the base name keeps resolving to the earliest save, not the newest.
     assert b.checkpoint.checkpoint_name == "v1 (1)"
@@ -227,14 +228,14 @@ def test_redaction_end_to_end(store, valid, root):
     valid["objective"] = f"use {SECRETS[1]}"
     valid["checkpoint_name"] = "with-" + SECRETS[3]
     res = store.save(valid)
-    on_disk = store.path_for(res.checkpoint_id).read_text()
+    on_disk = disk_text(store, res.checkpoint_id)
     history = git(root, "log", "-p", "--format=fuller")
     for text in (on_disk, history):
         for s in SECRETS:
             secret_part = s.split("=")[-1].strip('" ') if "=" in s or ":" in s else s.split()[-1]
             assert secret_part not in text, s
         assert "[REDACTED]" in text
-    content = json.loads(on_disk)["verbatim"][0]["content"]
+    content = (cp_path(store, res.checkpoint_id) / "verbatim" / "01-code.txt").read_text(encoding="utf-8")
     assert content.startswith(PLAIN_CODE)  # ordinary text/code byte-for-byte
     assert "password = \"[REDACTED]\"" in content
     assert "api_key=[REDACTED]" in content
@@ -292,12 +293,12 @@ def _names(store):
 
 def test_duplicate_names_renumbered_immutably(store, valid):
     a = save(store, valid, chat_name="trial", checkpoint_name="test-v1")
-    before = store.path_for("cp-001").read_bytes()
+    before = tree_bytes(cp_path(store, "cp-001"))
     b = save(store, valid, chat_name="trial", checkpoint_name="test-v1")
     c = save(store, valid, chat_name="trial", checkpoint_name="test-v1")
     assert (a.checkpoint_id, b.checkpoint_id, c.checkpoint_id) == ("cp-001", "cp-002", "cp-003")
     assert _names(store) == {"cp-001": "test-v1", "cp-002": "test-v1 (1)", "cp-003": "test-v1 (2)"}
-    assert store.path_for("cp-001").read_bytes() == before
+    assert tree_bytes(cp_path(store, "cp-001")) == before
     log = subprocess.run(["git", "-C", str(store.root), "log", "--format=%s"],
                          capture_output=True, text=True).stdout.splitlines()
     assert log[1] == "checkpoint: cp-002 trial/test-v1 (1)" and len(log) == 3

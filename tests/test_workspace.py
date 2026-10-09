@@ -3,6 +3,7 @@ import asyncio
 import copy
 
 import pytest
+from disk import cp_path, disk_text, remove_cp, tree_bytes
 
 from ai_checkpoint import GitStore
 from ai_checkpoint.brief import render_brief
@@ -76,7 +77,7 @@ def test_env_var_value_never_stored(valid, tmp_path):
     assert [i["name"] for i in cp.workspace["env_vars"]] == ["ANTHROPIC_API_KEY", "FOO"]
     store = GitStore(tmp_path / "h")
     res = store.save(_ws(copy.deepcopy(valid), ws))
-    raw = store.path_for(res.checkpoint_id).read_text(encoding="utf-8")
+    raw = disk_text(store, res.checkpoint_id)
     assert "sk-ant" not in raw and "abc123" not in raw and "bar-baz" not in raw
     assert "ANTHROPIC_API_KEY" in raw and "=" not in raw.split('"env_vars"')[1].split("]")[0]
 
@@ -90,7 +91,7 @@ def test_secrets_in_workspace_strings_redacted_on_disk(valid, tmp_path):
     }
     store = GitStore(tmp_path / "h")
     res = store.save(_ws(valid, ws))
-    raw = store.path_for(res.checkpoint_id).read_text(encoding="utf-8")
+    raw = disk_text(store, res.checkpoint_id)
     for leak in ("abcd1234efgh", "abcdef1234567890xyz", "hunter2hunter2", "sk-ant-abc123"):
         assert leak not in raw
     assert "[REDACTED]" in raw
@@ -189,6 +190,6 @@ def test_url_credentials_in_workspace_redacted_on_disk(valid, tmp_path):
     }
     store = GitStore(tmp_path / "h")
     res = store.save(_ws(valid, ws))
-    raw = store.path_for(res.checkpoint_id).read_text(encoding="utf-8")
+    raw = disk_text(store, res.checkpoint_id)
     assert "tok_abcdef123456" not in raw and "hunter2pw" not in raw
     assert "git.example.com/r.git" in raw and "@h/db" in raw

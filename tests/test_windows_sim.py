@@ -10,6 +10,7 @@ import types
 from pathlib import Path
 
 import pytest
+from disk import cp_path, disk_text, remove_cp, tree_bytes
 
 from ai_checkpoint import GitStore
 from ai_checkpoint.errors import NotFoundError, StoreError
@@ -45,7 +46,7 @@ def test_msvcrt_lock_used_and_unlocked(store, valid, win):
     lock, unlock = win.calls
     assert lock[0] == unlock[0] and lock[2] == unlock[2]
     assert lock[3] == 0 and unlock[3] == 0  # fixed range from offset 0
-    assert store.path_for(r.checkpoint_id).is_file()
+    assert cp_path(store, r.checkpoint_id).is_dir()
     assert store._git("log", "--oneline").stdout.count("\n") == 1
 
 
@@ -61,7 +62,7 @@ def test_msvcrt_unlock_on_failure(store, valid, win, monkeypatch):
     with pytest.raises(StoreError):
         store.save(valid)
     assert win.calls[-1][1] == win.LK_UNLCK
-    assert not list(store.checkpoint_dir.glob("cp-*.json"))
+    assert not list(store.root.glob("chats/*/checkpoints/cp-*"))
 
 
 def test_no_lock_modules_noop(store, valid, monkeypatch):
@@ -94,7 +95,7 @@ def test_fcntl_concurrent_saves_distinct_ids(root, valid):
 def test_utf8_no_crlf_roundtrip(store, valid):
     valid["context"] = UNI
     r = store.save(valid)
-    raw = store.path_for(r.checkpoint_id).read_bytes()
+    raw = tree_bytes(cp_path(store, r.checkpoint_id))
     assert b"\r\n" not in raw
     assert UNI.encode("utf-8") in raw
     assert store.get(r.checkpoint_id).context == UNI
@@ -102,9 +103,10 @@ def test_utf8_no_crlf_roundtrip(store, valid):
 
 def test_crlf_file_still_loads(store, valid):
     r = store.save(valid)
-    p = store.path_for(r.checkpoint_id)
-    p.write_bytes(p.read_bytes().replace(b"\n", b"\r\n"))
-    assert b"\r\n" in p.read_bytes()
+    for p in cp_path(store, r.checkpoint_id).rglob("*"):
+        if p.is_file() and p.name != "manifest.json":
+            p.write_bytes(p.read_bytes().replace(b"\n", b"\r\n"))
+    assert b"\r\n" in tree_bytes(cp_path(store, r.checkpoint_id))
     assert len(store.list()) == 1
     assert store.get(r.checkpoint_id).objective == valid["objective"]
     from ai_checkpoint.brief import render_brief

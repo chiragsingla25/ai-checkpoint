@@ -4,9 +4,11 @@ Layout::
 
     <root>/.git
     <root>/checkpoints/cp-001.json
-    <root>/checkpoints/cp-002.json
+    <root>/checkpoints/cp-002.json            (old flat files, read in place)
+    <root>/chats/<chat>/chat.json, events.jsonl
+    <root>/chats/<chat>/checkpoints/cp-003/   (bundles, see docs/DESIGN-v2.md)
 
-Each save writes one new file and makes exactly one commit
+Each save writes one new bundle folder and makes exactly one commit
 ``checkpoint: cp-NNN <chat_name>/<checkpoint_name>``. Files are never
 rewritten. Ids come from max(files on disk, ids ever committed) + 1, so they
 are not reused even if a file is deleted from the working tree.
@@ -25,13 +27,17 @@ from pathlib import Path
 from typing import Any, Callable, Iterator, List, Mapping, Optional, Union
 
 from . import brief as _brief
+from . import bundle as _bundle
 from .errors import NotFoundError, StoreError, ValidationError
 from .model import ID_RE, Checkpoint, format_id, id_number
 from .redact import redact_obj
 
 ENV_HOME = "AI_CHECKPOINT_HOME"
 CHECKPOINT_DIR = "checkpoints"
+CHATS_DIR = "chats"
 _FILE_RE = re.compile(r"^cp-(\d+)\.json$")
+_BUNDLE_RE = re.compile(r"^cp-(\d+)$")
+_BUNDLE_PATH_RE = re.compile(r"^chats/[^/]+/checkpoints/cp-(\d+)/")
 _NUMBERED_RE = re.compile(r"^(.*\S)\s+\((\d+)\)$")
 _GIT_IDENTITY = ("-c", "user.name=AI Checkpoint", "-c", "user.email=ai-checkpoint@localhost",
                  "-c", "commit.gpgsign=false")
@@ -137,7 +143,40 @@ class GitStore:
         return self.root / CHECKPOINT_DIR
 
     def path_for(self, checkpoint_id: str) -> Path:
+        """Path of an old flat checkpoint file (bundles: see ``_bundle_dirs``)."""
         return self.checkpoint_dir / f"{checkpoint_id}.json"
+
+    @property
+    def chats_dir(self) -> Path:
+        return self.root / CHATS_DIR
+
+    def _bundle_dirs(self) -> "List[tuple]":
+        """(number, folder) for every bundle folder on disk."""
+        out = []
+        if self.chats_dir.is_dir():
+            for chat in self.chats_dir.iterdir():
+                cps = chat / CHECKPOINT_DIR
+                if cps.is_dir():
+                    out.extend((int(m.group(1)), p) for p in cps.iterdir()
+                               if p.is_dir() and (m := _BUNDLE_RE.match(p.name)))
+        return out
+
+    def _chat_folder_for(self, chat_name: str) -> "tuple":
+        """(folder path, exists) for a chat: found by chat.json key, else a free name."""
+        key = _bundle.chat_key(chat_name)
+        base = _bundle.chat_folder(chat_name)
+        n = 1
+        while True:
+            folder = self.chats_dir / (base if n == 1 else f"{base}-{n}")
+            meta = folder / "chat.json"
+            if not folder.exists():
+                return folder, False
+            try:
+                if json.loads(meta.read_text(encoding="utf-8")).get("key") == key:
+                    return folder, True
+            except (OSError, ValueError, AttributeError):
+                pass
+            n += 1
 
     # ------------------------------------------------------------- git
     def _git(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -211,21 +250,24 @@ class GitStore:
     def _committed_numbers(self) -> List[int]:
         if not (self.root / ".git").exists():
             return []
-        proc = self._git("log", "--name-only", "--format=", "--", CHECKPOINT_DIR, check=False)
+        proc = self._git("log", "--name-only", "--format=", "--", CHECKPOINT_DIR, CHATS_DIR,
+                         check=False)
         if proc.returncode != 0:  # e.g. no commits yet
             return []
         nums = []
         for line in proc.stdout.splitlines():
-            m = _FILE_RE.match(line.strip().rsplit("/", 1)[-1])
+            line = line.strip()
+            m = _BUNDLE_PATH_RE.match(line) or _FILE_RE.match(line.rsplit("/", 1)[-1])
             if m:
                 nums.append(int(m.group(1)))
         return nums
 
     def _file_numbers(self) -> List[int]:
-        if not self.checkpoint_dir.is_dir():
-            return []
-        return [int(m.group(1)) for p in self.checkpoint_dir.iterdir()
-                if (m := _FILE_RE.match(p.name))]
+        flat = []
+        if self.checkpoint_dir.is_dir():
+            flat = [int(m.group(1)) for p in self.checkpoint_dir.iterdir()
+                    if (m := _FILE_RE.match(p.name))]
+        return flat + [n for n, _ in self._bundle_dirs()]
 
     def _next_id(self) -> str:
         return format_id(max(self._file_numbers() + self._committed_numbers() + [0]) + 1)
@@ -262,23 +304,60 @@ class GitStore:
             renamed, original_id, clash_id = self._unique_name(cp)
             cp.checkpoint_id = self._next_id()
             cp.created_at = self._clock().astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            path = self.path_for(cp.checkpoint_id)
-            payload = json.dumps(cp.to_dict(), indent=2, ensure_ascii=False) + "\n"
-            rel = f"{CHECKPOINT_DIR}/{cp.checkpoint_id}.json"
+            chat_dir, chat_exists = self._chat_folder_for(cp.chat_name)
+            bundle_dir = chat_dir / CHECKPOINT_DIR / cp.checkpoint_id
+            events_path = chat_dir / "events.jsonl"
+            chat_json = chat_dir / "chat.json"
+            old_events = events_path.read_bytes() if events_path.is_file() else None
+            relroot = chat_dir.relative_to(self.root).as_posix()
+            paths = [f"{relroot}/{CHECKPOINT_DIR}/{cp.checkpoint_id}", f"{relroot}/events.jsonl"]
+            if not chat_json.is_file():
+                paths.append(f"{relroot}/chat.json")
             try:
-                with open(path, "x", encoding="utf-8", newline="\n") as fh:
-                    fh.write(payload)
-                self._git("add", "--", rel)
+                _bundle.write_bundle(bundle_dir, cp, _brief.render_brief(cp))
+                if not chat_json.is_file():
+                    chat_json.write_bytes(_bundle.dumps_json(
+                        {"version": _bundle.BUNDLE_VERSION, "chat_name": cp.chat_name,
+                         "key": _bundle.chat_key(cp.chat_name)}))
+                tasks = _bundle.tasks_from_next_steps(cp.next_steps)
+                nxt = _bundle.next_action(tasks)
+                seq = (old_events or b"").count(b"\n") + 1
+                event = _bundle.dumps_jsonl([{
+                    "seq": seq, "ts": cp.created_at, "type": "checkpoint_saved",
+                    "checkpoint_id": cp.checkpoint_id, "checkpoint_name": cp.checkpoint_name,
+                    "resumed_from": cp.resumed_from, "client": cp.client, "tasks": len(tasks),
+                    "unfinished": sum(t["status"] != "done" for t in tasks),
+                    "next_action": nxt["task_id"] if nxt else None,
+                    "renamed_from": requested if renamed else None}])
+                with open(events_path, "ab") as fh:
+                    fh.write(event)
+                self._git("add", "--", *paths)
                 self._git(*_GIT_IDENTITY, "commit", "-q", "--no-verify", "-m",
                           f"checkpoint: {cp.checkpoint_id} {cp.chat_name}/{cp.checkpoint_name}",
-                          "--", rel)
+                          "--", *paths)
             except BaseException:
-                with contextlib.suppress(OSError):
-                    path.unlink()
-                self._git("reset", "-q", "--", rel, check=False)
+                self._rollback(chat_dir, bundle_dir, events_path, old_events, chat_exists, paths)
                 raise
             commit = self._git("rev-parse", "HEAD").stdout.strip()
         return SaveResult(cp.checkpoint_id, commit, cp, renamed, requested, original_id, clash_id)
+
+    def _rollback(self, chat_dir, bundle_dir, events_path, old_events, chat_existed, paths):
+        """Undo a failed save: restore events.jsonl, remove what this save created."""
+        import shutil
+        shutil.rmtree(bundle_dir, ignore_errors=True)
+        with contextlib.suppress(OSError):
+            if old_events is None:
+                events_path.unlink()
+            else:
+                events_path.write_bytes(old_events)
+        if not chat_existed:
+            with contextlib.suppress(OSError):
+                (chat_dir / "chat.json").unlink()
+            with contextlib.suppress(OSError):
+                (chat_dir / CHECKPOINT_DIR).rmdir()
+            with contextlib.suppress(OSError):
+                chat_dir.rmdir()
+        self._git("reset", "-q", "--", *paths, check=False)
 
     def _unique_name(self, cp: Checkpoint):
         """Finder-style renumbering within the chat (case-insensitive).
@@ -307,19 +386,26 @@ class GitStore:
     # ------------------------------------------------------------ read
     def _load(self, path: Path) -> Optional[Checkpoint]:
         try:
+            if path.is_dir():
+                return _bundle.read_bundle(path)
             return Checkpoint.from_dict(json.loads(path.read_text(encoding="utf-8")))
-        except (OSError, ValueError):
-            return None  # unreadable / corrupt file: skip rather than break listing
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return None  # unreadable / corrupt file or bundle: skip rather than break listing
+
+    def _path_of(self, checkpoint_id: str) -> Optional[Path]:
+        """Flat file or bundle folder for an id, or None."""
+        flat = self.path_for(checkpoint_id)
+        if flat.is_file():
+            return flat
+        n = id_number(checkpoint_id)
+        return next((p for num, p in self._bundle_dirs() if num == n), None)
 
     def _all(self) -> List[Checkpoint]:
         """All stored checkpoints, newest (highest id) first."""
-        if not self.checkpoint_dir.is_dir():
-            return []
-        files = sorted(
-            ((int(m.group(1)), p) for p in self.checkpoint_dir.iterdir()
-             if (m := _FILE_RE.match(p.name))),
-            key=lambda t: t[0], reverse=True,
-        )
+        files = [(int(m.group(1)), p) for p in (self.checkpoint_dir.iterdir()
+                 if self.checkpoint_dir.is_dir() else []) if (m := _FILE_RE.match(p.name))]
+        files += self._bundle_dirs()
+        files.sort(key=lambda t: t[0], reverse=True)
         return [cp for _, p in files if (cp := self._load(p)) is not None]
 
     def resolve(self, ref: str) -> str:
@@ -335,8 +421,8 @@ class GitStore:
         m = ID_RE.match(ref_s)
         if m:
             cid = format_id(int(m.group(1)))
-            p = self.path_for(cid)
-            if p.is_file() and self._load(p) is not None:
+            p = self._path_of(cid)
+            if p is not None and self._load(p) is not None:
                 return cid
             raise NotFoundError(ref)
         cps = self._all()  # newest first
@@ -361,7 +447,8 @@ class GitStore:
     def get(self, ref: str) -> Checkpoint:
         """Return the stored checkpoint for ``ref`` (see ``resolve``)."""
         cid = self.resolve(ref)
-        cp = self._load(self.path_for(cid))
+        p = self._path_of(cid)
+        cp = self._load(p) if p is not None else None
         if cp is None:  # pragma: no cover (raced with a delete)
             raise NotFoundError(ref)
         return cp

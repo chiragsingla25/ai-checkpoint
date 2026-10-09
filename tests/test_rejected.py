@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from disk import cp_path, disk_text, remove_cp, tree_bytes
 
 from ai_checkpoint import GitStore
 from ai_checkpoint.brief import render_brief
@@ -83,7 +84,7 @@ def test_save_redacts_secrets_in_option_and_note(store, valid):
         "note": "had token=abcd1234efgh in the URL",
     }])
     res = store.save(valid)
-    raw = store.path_for(res.checkpoint_id).read_text(encoding="utf-8")
+    raw = disk_text(store, res.checkpoint_id)
     assert "sk-ant-api03-abcdefghijklmnop1234" not in raw
     assert "abcd1234efgh" not in raw
     r = store.get(res.checkpoint_id).decisions[0].rejected[0]

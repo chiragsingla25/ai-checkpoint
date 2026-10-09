@@ -9,3 +9,6 @@ Plan approved as written: 6 features on branch feature/checkpoint-bundle-v2; pus
 ## F-001 amendment rulings (orchestrator, technical; reported to Chirag)
 - QA's design review found gaps; resolved in DESIGN-v2.md: id scan includes git history and bundles; chat folder = slug + hash with chat.json and suffix on collision; the free-text "alternatives not recorded" check is dropped (false positives) and checks apply only to new/changed items; task ids continue from the lineage max; first-save rollback removes new files.
 - features.json F-004 criteria 0, 1 and 3 updated to match decisions.md ruling 2 and the dropped heuristic.
+
+## F-002 criterion on commit contents (QA objection, attempt 1)
+- Ruling (orchestrator, follows the F-001 amendment; reported to Chirag): the first save of a chat also commits chat.json. Criterion reworded accordingly. Does not count as an attempt.

@@ -14,7 +14,7 @@
     "id": "F-002",
     "title": "Bundle storage with manifest, events log and old-format compatibility",
     "acceptance": [
-      "A save through `GitStore(tmp).save(...)` with today's (old-style) fields creates `chats/<chat>/checkpoints/cp-001/` containing manifest.json, plan.json, decisions.jsonl, facts.jsonl, workspace.json, user_turns.jsonl, verbatim/, open_questions.json and brief.md, and makes exactly one new git commit containing only that folder and the chat's events.jsonl",
+      "A save through `GitStore(tmp).save(...)` with today's (old-style) fields creates `chats/<chat>/checkpoints/cp-001/` containing manifest.json, plan.json, decisions.jsonl, facts.jsonl, workspace.json, user_turns.jsonl, verbatim/, open_questions.json and brief.md, and makes exactly one new git commit containing only that folder, the chat's events.jsonl and, on the chat's first save only, the chat's chat.json",
       "manifest.json holds id, resumed_from (or null), created_at, client, and a sha256 for every other file in the bundle; recomputing sha256 of each file matches the manifest",
       "Each verbatim item is written as a real file under verbatim/ whose bytes equal the saved text exactly (test with tabs, trailing spaces, CRLF, backticks and non-ASCII); two items with the same label do not overwrite each other",
       "`chats/<chat>/events.jsonl` gains exactly one appended line per save (earlier lines unchanged byte for byte) naming the checkpoint id and event type",

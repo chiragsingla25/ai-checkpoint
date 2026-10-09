@@ -42,6 +42,7 @@ Root is `~/.ai-checkpoint` (overridable, as today). Old layout: `<root>/checkpoi
           user_turns.jsonl         the user's key messages verbatim
           verbatim/                exact snippets, one real file each
             01-model.txt
+            .keep                    empty marker so verbatim/ exists in git clones; hashed in the manifest like any file
           open_questions.json      incl. waiting_on_user
           brief.md                 rendered view, never the source of truth
 ```
@@ -352,7 +353,7 @@ The events line records `resumed_from`. If the parent id does not exist, the sav
 - **Old flat files** `checkpoints/cp-NNN.json` are read in place by `get`, `list`, `resolve` and `resume_checkpoint`. They are never rewritten, renamed, moved or migrated, and nothing in a bundle save touches them (their file hash is unchanged after later saves).
 - **Resume of an old file** renders with the old `render_brief` path, byte-identical to today. Golden test: `tests/fixtures/old_format_cp.json` resumed gives exactly `tests/fixtures/old_format_brief.golden.md`.
 - **Mixed store**: `list` merges old files and bundles ordered by id, newest first; `resolve`/renumbering look at both; ids are global (section 4). A corrupt bundle (unreadable manifest, bad JSON in a data file, higher `version`) is skipped by `list` and `resolve` like a corrupt flat file is today.
-- **Old-style input, new storage.** Every save writes a bundle. Old fields map as: `next_steps` -> tasks, in order, `order` 10, 20, ...; a step starting with `User's plan:` becomes `from=user` with the prefix removed from `text` and `quote` set to that text (these derived quotes are not checked); other steps are `from=ai`; all `todo`. `decisions` -> decisions.jsonl with ids, `status: active`. `open_questions` strings -> `waiting_on_user: false`. `completed`, `context`, `notes_for_next_ai`, `last_exchange` -> `core.json`. `user_turns` is derived from `last_exchange.user` when non-empty so quote checks on later resumes have evidence; otherwise empty.
+- **Old-style input, new storage.** Every save writes a bundle. Old fields map as: `next_steps` -> tasks, in order, `order` 10, 20, ...; a step starting with `User's plan:` becomes `from=user` with the prefix removed from `text` and `quote` set to that text (these derived quotes are not checked); the task also keeps the original step in a `raw` field so the flat view returns `next_steps` byte for byte (these derived quotes are not checked); other steps are `from=ai`; all `todo`. `decisions` -> decisions.jsonl with ids, `status: active`. `open_questions` strings -> `waiting_on_user: false`. `completed`, `context`, `notes_for_next_ai`, `last_exchange` -> `core.json`. `user_turns` is derived from `last_exchange.user` when non-empty so quote checks on later resumes have evidence; otherwise empty.
 - **`get_checkpoint`** returns both shapes for bundles (section 7); for old flat files it returns the old dict unchanged.
 - The `Checkpoint` dataclass and `Checkpoint.from_dict` keep working for old data; the bundle loader builds the flat `Checkpoint` view from the bundle for callers that still want it.
 
