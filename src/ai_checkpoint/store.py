@@ -28,6 +28,7 @@ from typing import Any, Callable, Iterator, List, Mapping, Optional, Union
 
 from . import brief as _brief
 from . import bundle as _bundle
+from . import structured as _structured
 from .errors import NotFoundError, StoreError, ValidationError
 from .model import ID_RE, Checkpoint, format_id, id_number
 from .redact import redact_obj
@@ -65,6 +66,8 @@ class SaveResult:
     requested_name: Optional[str] = None
     original_id: Optional[str] = None
     clash_id: Optional[str] = None  # id already holding the requested name
+    next_action: Optional[dict] = None  # {"task_id", "text"} or None
+    echo: str = ""  # "Next action saved: <task text>. Correct?"
 
     def to_dict(self) -> dict:
         name = self.checkpoint.checkpoint_name
@@ -78,7 +81,8 @@ class SaveResult:
                 "checkpoint_name": name, "renamed": self.renamed,
                 "requested_name": requested,
                 "original_id": self.original_id if self.renamed else None,
-                "message": message}
+                "next_action": self.next_action,
+                "message": f"{message} {self.echo}" if self.echo else message}
 
 
 @dataclass
@@ -298,12 +302,18 @@ class GitStore:
                 raise ValidationError(
                     "resumed_from", f"no checkpoint matches {cp.resumed_from!r}") from None
 
+        cp.v2 = _structured.build(clean, cp, self._task_base(cp.resumed_from))
+        cp.decisions = [d for d, row in zip(cp.decisions, cp.v2.decisions)
+                        if row["status"] == "active"]
+        cp.next_steps = _bundle.next_steps_from_tasks(cp.v2.tasks)
+
         self._ensure_repo()
         with self._lock():
             requested = cp.checkpoint_name
             renamed, original_id, clash_id = self._unique_name(cp)
             cp.checkpoint_id = self._next_id()
             cp.created_at = self._clock().astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            _structured.finalize(cp.v2, cp.created_at)
             chat_dir, chat_exists = self._chat_folder_for(cp.chat_name)
             bundle_dir = chat_dir / CHECKPOINT_DIR / cp.checkpoint_id
             events_path = chat_dir / "events.jsonl"
@@ -319,8 +329,9 @@ class GitStore:
                     chat_json.write_bytes(_bundle.dumps_json(
                         {"version": _bundle.BUNDLE_VERSION, "chat_name": cp.chat_name,
                          "key": _bundle.chat_key(cp.chat_name)}))
-                tasks = _bundle.tasks_from_next_steps(cp.next_steps)
-                nxt = _bundle.next_action(tasks)
+                tasks = cp.v2.tasks
+                info = _structured.next_action_info(tasks)
+                nxt = info["action"]
                 seq = (old_events or b"").count(b"\n") + 1
                 event = _bundle.dumps_jsonl([{
                     "seq": seq, "ts": cp.created_at, "type": "checkpoint_saved",
@@ -339,7 +350,8 @@ class GitStore:
                 self._rollback(chat_dir, bundle_dir, events_path, old_events, chat_exists, paths)
                 raise
             commit = self._git("rev-parse", "HEAD").stdout.strip()
-        return SaveResult(cp.checkpoint_id, commit, cp, renamed, requested, original_id, clash_id)
+        return SaveResult(cp.checkpoint_id, commit, cp, renamed, requested, original_id, clash_id,
+                          nxt, _structured.echo_text(info))
 
     def _rollback(self, chat_dir, bundle_dir, events_path, old_events, chat_existed, paths):
         """Undo a failed save: restore events.jsonl, remove what this save created."""
@@ -358,6 +370,15 @@ class GitStore:
             with contextlib.suppress(OSError):
                 chat_dir.rmdir()
         self._git("reset", "-q", "--", *paths, check=False)
+
+    def _task_base(self, parent_id: Optional[str]) -> int:
+        """Highest task number in the parent's plan (task ids continue from it)."""
+        if not parent_id:
+            return 0
+        parent = self.get(parent_id)
+        if parent.v2 is not None:
+            return _structured.max_task_number(parent.v2.tasks)
+        return len(parent.next_steps)
 
     def _unique_name(self, cp: Checkpoint):
         """Finder-style renumbering within the chat (case-insensitive).

@@ -359,8 +359,14 @@ def test_api_failure_is_a_clean_model_error(monkeypatch):
 # eval-runs/2026-10-09-handover-v2-haiku: the user's own plan must lead next_steps (marker
 # "User's plan:"), done_with workspace items must be listed, and every decision with discussed
 # alternatives must fill `rejected`.
-_HEAD_SAVE_DESCRIPTION_SHA256 = "3d9a427f1682e0ac158006e898417dc99b35d908347ac9aac16461d98a34c6a8"
-_HEAD_SAVE_DESCRIPTION_LEN = 2829
+# Deliberately updated a third time (was sha 3d9a427f..., len 2829) for checkpoint bundle v2
+# (F-003): the plan is now given as `tasks` (user steps first, each with the user's exact
+# quote; `user_turns` hold the user's messages) and the old "User's plan:" next_steps rule
+# became a one-line "old form" note. Wording kept short for small models.
+# F-003 attempt 2 (owner ruling): "numbers them for you; in depends_on, task k of your list is
+# t-k" replaced "numbers the tasks t-1, t-2, ..." -> len 3240 -> 3258, hash updated on purpose.
+_HEAD_SAVE_DESCRIPTION_SHA256 = "4f5dfdcadaf12d30bb25e5d3cd9a21d091e5f0763699ae3e0bff2140fa6df923"
+_HEAD_SAVE_DESCRIPTION_LEN = 3258
 
 
 def test_save_description_matches_committed_head_text():
@@ -370,7 +376,7 @@ def test_save_description_matches_committed_head_text():
     assert len(raw) == _HEAD_SAVE_DESCRIPTION_LEN
     assert hashlib.sha256(raw).hexdigest() == _HEAD_SAVE_DESCRIPTION_SHA256
     # the paragraph break the QA found missing
-    assert 'do not write "User\'s plan:".\n\nPick a short, descriptive `checkpoint_name`' in SAVE_DESCRIPTION
+    assert 'prefer `tasks`.\n\nPick a short, descriptive `checkpoint_name`' in SAVE_DESCRIPTION
 
 
 def test_registered_save_tool_description_matches_head_hash():

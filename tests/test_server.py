@@ -81,7 +81,11 @@ def test_save_schema_documents_sections(tmp_path):
                  "current_step", "next_steps", "open_questions", "verbatim", "last_exchange",
                  "notes_for_next_ai", "client", "resumed_from"):
         assert props[name].get("description"), name
-    assert {"objective", "current_step", "next_steps"} <= set(schema["required"])
+    # F-003: next_steps is no longer required (the plan can be given as `tasks` instead)
+    assert {"objective", "current_step"} <= set(schema["required"])
+    assert "next_steps" not in schema["required"] and "tasks" not in schema["required"]
+    for name in ("tasks", "user_turns", "facts"):
+        assert props[name].get("description"), name
     assert "client" not in schema["required"] and "resumed_from" not in schema["required"]
     desc = tools["save_checkpoint"].description
     for phrase in ("EVERY section", "word for word", "Never invent", "verbatim"):

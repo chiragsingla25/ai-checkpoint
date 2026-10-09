@@ -102,31 +102,24 @@ def dumps_jsonl(rows: List[dict]) -> bytes:
 # ---------------------------------------------------------------- write
 def bundle_files(cp: Checkpoint, brief_text: str) -> "dict[str, bytes]":
     """Every file of the bundle (relative path -> bytes), except manifest.json."""
-    ce = cp.to_dict()
-    tasks = tasks_from_next_steps(cp.next_steps)
-    decisions = []
-    for i, d in enumerate(ce["decisions"], 1):
-        decisions.append({"id": f"d-{i}", "decision": d["decision"], "reason": d["reason"],
-                          "rejected": d.get("rejected", []), "status": "active",
-                          "supersedes": None})
-    turns = ([{"n": 1, "text": cp.last_exchange.user}] if cp.last_exchange.user else [])
+    from . import structured
+    v2 = cp.v2 if cp.v2 is not None else structured.from_flat(cp)
+    info = structured.next_action_info(v2.tasks)
     files = {
         "core.json": dumps_json({
             "objective": cp.objective, "context": cp.context, "completed": list(cp.completed),
             "current_step": cp.current_step, "notes_for_next_ai": cp.notes_for_next_ai,
             "last_exchange": {"user": cp.last_exchange.user,
                               "assistant": cp.last_exchange.assistant}}),
-        "plan.json": dumps_json({"version": BUNDLE_VERSION, "tasks": tasks,
-                                 "next_action": next_action(tasks)}),
-        "decisions.jsonl": dumps_jsonl(decisions),
-        "facts.jsonl": b"",
+        "plan.json": dumps_json({"version": BUNDLE_VERSION, "tasks": v2.tasks,
+                                 "next_action": info["action"]}),
+        "decisions.jsonl": dumps_jsonl(v2.decisions),
+        "facts.jsonl": dumps_jsonl(v2.facts),
         "workspace.json": dumps_json({c: [dict(i) for i in items]
                                       for c, items in cp.workspace.items()}),
-        "user_turns.jsonl": dumps_jsonl(turns),
+        "user_turns.jsonl": dumps_jsonl(v2.user_turns),
         "verbatim/.keep": b"",  # keeps verbatim/ in git clones when there are no items
-        "open_questions.json": dumps_json({"questions": [
-            {"id": f"q-{i}", "text": q, "waiting_on_user": False}
-            for i, q in enumerate(cp.open_questions, 1)]}),
+        "open_questions.json": dumps_json({"questions": v2.questions}),
         "brief.md": brief_text.encode("utf-8"),
     }
     for i, v in enumerate(cp.verbatim, 1):
@@ -167,14 +160,18 @@ def read_bundle(folder: Path) -> Checkpoint:
     man = jload("manifest.json")
     if not isinstance(man, dict) or man.get("version") != BUNDLE_VERSION:
         raise ValueError("unsupported bundle version")
+    from . import structured
     core, plan = jload("core.json"), jload("plan.json")
+    all_decisions = jlines("decisions.jsonl")
     decisions = [{k: v for k, v in d.items() if k in ("decision", "reason", "rejected") and
                   not (k == "rejected" and not v)}
-                 for d in jlines("decisions.jsonl") if d.get("status", "active") == "active"]
+                 for d in all_decisions if d.get("status", "active") == "active"]
     verbatim = [{"label": v["label"],
                  "content": (folder / v["file"]).read_bytes().decode("utf-8")}
                 for v in man.get("verbatim", [])]
-    questions = [q["text"] for q in jload("open_questions.json")["questions"]]
+    questions = jload("open_questions.json")["questions"]
+    v2 = structured.V2(tasks=plan["tasks"], decisions=all_decisions, facts=jlines("facts.jsonl"),
+                       user_turns=jlines("user_turns.jsonl"), questions=questions, manifest=man)
     data = {
         "checkpoint_id": man["id"], "chat_name": man["chat_name"],
         "checkpoint_name": man["checkpoint_name"], "created_at": man["created_at"],
@@ -183,11 +180,13 @@ def read_bundle(folder: Path) -> Checkpoint:
         "decisions": decisions, "completed": core["completed"],
         "current_step": core["current_step"],
         "next_steps": next_steps_from_tasks(plan["tasks"]),
-        "open_questions": questions, "verbatim": verbatim,
+        "open_questions": [q["text"] for q in questions], "verbatim": verbatim,
         "last_exchange": core["last_exchange"], "notes_for_next_ai": core["notes_for_next_ai"],
         "workspace": jload("workspace.json"),
     }
     try:
-        return Checkpoint.from_dict(data)
+        cp = Checkpoint.from_dict(data)
     except ValidationError as e:
         raise ValueError(str(e)) from None
+    cp.v2 = v2
+    return cp

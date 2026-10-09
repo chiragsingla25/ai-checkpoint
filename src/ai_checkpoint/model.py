@@ -124,6 +124,8 @@ class Checkpoint:
     resumed_from: Optional[str] = None
     checkpoint_id: str = ""
     created_at: str = ""
+    #: Structured v2 data (structured.V2) for bundle checkpoints; None for old flat files.
+    v2: Any = field(default=None, repr=False, compare=False)
 
     # ------------------------------------------------------------------ io
     def to_dict(self) -> dict:
@@ -170,11 +172,11 @@ class Checkpoint:
             checkpoint_name=_name(g("checkpoint_name"), "checkpoint_name", allow_slash=True),
             objective=_req_str(g("objective"), "objective"),
             current_step=_req_str(g("current_step"), "current_step"),
-            next_steps=_str_list(g("next_steps"), "next_steps", required=True),
+            next_steps=_next_steps(g("next_steps"), g("tasks")),
             context=_opt_str(g("context"), "context"),
             decisions=_decisions(g("decisions")),
             completed=_str_list(g("completed"), "completed"),
-            open_questions=_str_list(g("open_questions"), "open_questions"),
+            open_questions=_questions(g("open_questions")),
             verbatim=_verbatim(g("verbatim")),
             last_exchange=_last_exchange(g("last_exchange")),
             notes_for_next_ai=_opt_str(g("notes_for_next_ai"), "notes_for_next_ai"),
@@ -184,6 +186,30 @@ class Checkpoint:
             checkpoint_id=_opt_str(g("checkpoint_id"), "checkpoint_id"),
             created_at=_opt_str(g("created_at"), "created_at"),
         )
+
+
+def _next_steps(v: Any, tasks: Any) -> list:
+    """``next_steps`` as given, or (when absent) the texts of ``tasks`` in the old step form."""
+    if (v is None or (isinstance(v, (list, tuple)) and not v)) and isinstance(tasks, (list, tuple)) and tasks:
+        steps = []
+        for i, t in enumerate(tasks):
+            if not isinstance(t, Mapping):
+                raise ValidationError(f"tasks[{i}]", f"must be an object, got {_type_name(t)}")
+            text = _req_str(t.get("text"), f"tasks[{i}].text")
+            steps.append(f"User's plan: {text}" if t.get("from") == "user" else text)
+        return steps
+    if v is None or (isinstance(v, (list, tuple)) and not v):
+        raise ValidationError("next_steps", "is required: give `tasks` (preferred) or `next_steps`")
+    return _str_list(v, "next_steps", required=True)
+
+
+def _questions(v: Any) -> list:
+    """Open questions as texts; each item is a string or an object with ``text``."""
+    if v is None:
+        return []
+    if not isinstance(v, (list, tuple)):
+        raise ValidationError("open_questions", f"must be a list, got {_type_name(v)}")
+    return _str_list([i.get("text") if isinstance(i, Mapping) else i for i in v], "open_questions")
 
 
 def _decision_dict(d: "Decision") -> dict:

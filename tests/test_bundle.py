@@ -259,7 +259,8 @@ def test_user_plan_steps_round_trip_byte_for_byte(store, valid, step):
     valid["next_steps"] = [step, "ai step"]
     r = save(store, valid)
     assert store.get(r.checkpoint_id).next_steps == [step, "ai step"]
-    assert step in render_brief(store.get(r.checkpoint_id))
+    # F-003: the v2 brief shows the plan as tasks (prefix dropped, user's words as the quote)
+    assert step[len("User's plan:"):].strip() in render_brief(store.get(r.checkpoint_id))
     plan = json.loads((cp_path(store, r.checkpoint_id) / "plan.json").read_text())
     assert plan["tasks"][0]["from"] == "user"
     assert plan["tasks"][0]["text"] == step[len("User's plan:"):].lstrip()

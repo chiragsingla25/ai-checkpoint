@@ -12,3 +12,7 @@ Plan approved as written: 6 features on branch feature/checkpoint-bundle-v2; pus
 
 ## F-002 criterion on commit contents (QA objection, attempt 1)
 - Ruling (orchestrator, follows the F-001 amendment; reported to Chirag): the first save of a chat also commits chat.json. Criterion reworded accordingly. Does not count as an attempt.
+
+## F-003 task numbering on resumed saves (QA finding, attempt 1)
+- Ruling (orchestrator, technical; reported to Chirag): in a fresh `tasks` list, `depends_on` is read positionally — `t-k` means the k-th item of THIS list — and the server rewrites it to the id actually assigned (t-(N+k), continuing from the lineage max). Ids are never reused. DESIGN-v2 §7's sentence "depends_on refers to tasks in the same list by the id they will receive" is replaced accordingly, and SAVE_DESCRIPTION says "the server numbers them for you; in depends_on, task k of your list is t-k".
+- Reason: a small model following the tool text must get the dependencies it meant; positional ids need no knowledge of the parent's highest id.

@@ -34,11 +34,17 @@ env var NAMES, skills/plugins/agents and external references. Judge each item: m
 too; do not leave them out. Examples: an abandoned folder (give its full path), an old file \
 name after a rename, a connector or tool no longer used, an env var NAME that was used. Give \
 env var names only, never their values, and no credential paths.
-- `current_step` is the exact step the chat was on at this moment, and `next_steps` are \
-ordered, concrete instructions the next AI can follow without asking. If the user stated \
-their own plan for what comes next, `next_steps` must START with that plan: the user's own \
-words, every part, in order, each step beginning with the exact text "User's plan:". Then add \
-your own steps. If the user gave no plan, do not write "User's plan:".
+- `current_step` is the exact step the chat was on at this moment.
+- `tasks` is the plan: one item per step, in order (the order to do them). Each has `text`, `status` \
+(todo, in_progress or done), `from` and `quote`. Put steps the user asked for first, with \
+`from` "user" and `quote` = the user's own words for that step, copied exactly from one of \
+their messages. Never invent a quote. Put those messages in `user_turns` (the user's key \
+messages, word for word). Steps you propose yourself have `from` "ai" and no quote. List \
+finished steps too, as done. At least one task must be todo or in_progress. The server \
+numbers them for you; in depends_on, task k of your list is t-k. It works out the next \
+action itself.
+- Old form: `next_steps` (strings, the user's own steps first, each starting with the exact \
+text "User's plan:") still works, but prefer `tasks`.
 
 Pick a short, descriptive `checkpoint_name` (for example "forecasting-v2").\
 """
@@ -59,10 +65,36 @@ FIELD_DESCRIPTIONS = {
     "objective": "What the work is for: the goal this whole chat is serving.",
     "current_step": "The exact step the chat was on when saved: what was being done, and how far it got.",
     "next_steps": (
-        "Ordered, concrete instructions for continuing from the current step. At least one. "
-        "If the user stated their own plan, it comes first, in their words and in order, each "
-        "step starting with \"User's plan:\"; your own steps come after."
+        "Old form of the plan, as strings. Prefer `tasks`. If you use it: at least one step; the "
+        "user's own steps first, in their words and in order, each starting with \"User's plan:\"; "
+        "your own steps after."
     ),
+    "tasks": (
+        "The plan: ordered steps, the user's own steps first. Each {text, status, from, quote, "
+        "depends_on?, order?}. Give this instead of next_steps. At least one task must be todo "
+        "or in_progress. The server numbers them t-1, t-2, ... in the order you give."
+    ),
+    "tasks.text": "What to do: one concrete step the next AI can follow without asking.",
+    "tasks.status": "todo, in_progress or done. Steps already finished are listed too, as done.",
+    "tasks.from": "\"user\" if the user asked for this step, \"ai\" if you propose it.",
+    "tasks.quote": (
+        "Required when from is \"user\": the user's exact words for this step, copied from one of "
+        "their messages (also listed in user_turns). Leave out for ai tasks."
+    ),
+    "tasks.depends_on": "Optional. Numbers of tasks that must be done first, e.g. [\"t-1\"]. Task k in your list is t-k.",
+    "tasks.order": "Optional. A number that sorts tasks, lowest first. Leave out to keep your list order.",
+    "user_turns": (
+        "The user's key messages, word for word: their goal, their plan, corrections and "
+        "decisions. Every user quote in `tasks` must come from here or from last_exchange.user."
+    ),
+    "facts": (
+        "Optional. Facts the next AI must treat as currently true, each {key, value, valid_from?}. "
+        "A new fact with the same key replaces the old one."
+    ),
+    "facts.key": "What the fact is about, e.g. 'data frequency'.",
+    "facts.value": "The current value, e.g. 'weekly'.",
+    "facts.valid_from": "Optional. Since when it is true (a date or a few words).",
+    "facts.superseded_by": "Optional. Number of a later fact in this list that replaces this one, e.g. \"f-2\".",
     "context": "Background facts, constraints, environment and preferences the user stated that the next AI must respect.",
     "decisions": (
         "Each decision made, with its reason, so settled questions are not reopened. "
@@ -77,6 +109,11 @@ FIELD_DESCRIPTIONS = {
         "\"prototyped\" (a trial or spike was made) or \"built_then_removed\" (fully built, then "
         "taken out). `note` is an optional short remark. This lets the next chat answer "
         "\"was X ever tried?\"."
+    ),
+    "decisions.status": "\"active\" (default) or \"superseded\".",
+    "decisions.supersedes": (
+        "Optional. Number of an earlier decision in this list that this one replaces, e.g. "
+        "\"d-1\". Decision k in your list is d-k."
     ),
     "decisions.rejected.option": "The rejected alternative, named plainly.",
     "decisions.rejected.how_far": (
@@ -103,7 +140,12 @@ FIELD_DESCRIPTIONS = {
     "workspace.env_vars": "Environment variables needed, by NAME only: {name, status}. Never include a value.",
     "workspace.skills": "Skills, plugins or agents used: {name, note?, status}.",
     "workspace.references": "External references (URL, doc, ticket, artifact): {name, url?, note?, status}.",
-    "open_questions": "Unresolved questions or items still waiting on the user.",
+    "open_questions": (
+        "Unresolved questions. Each is a string, or {text, waiting_on_user}. Set waiting_on_user "
+        "to true when you asked the user and are waiting for the answer."
+    ),
+    "open_questions.text": "The question.",
+    "open_questions.waiting_on_user": "true if the user was asked and has not answered yet.",
     "verbatim": "Material that must not be paraphrased: code, numbers, exact wording, file contents. Each with a label.",
     "verbatim.label": "Short label saying what this is, e.g. 'SQL query' or 'system prompt'.",
     "verbatim.content": (
@@ -127,13 +169,27 @@ COMPACTION_FIELDS = (
     (
         "decisions",
         "array of {decision: string, reason: string, rejected?: array of "
-        "{option: string, how_far: \"discussed\"|\"prototyped\"|\"built_then_removed\", note?: string}}",
+        "{option: string, how_far: \"discussed\"|\"prototyped\"|\"built_then_removed\", note?: string}, "
+        "status?: \"active\"|\"superseded\", supersedes?: string}",
         False,
     ),
     ("completed", "array of strings", False),
     ("current_step", "string", True),
-    ("next_steps", "array of strings (at least one)", True),
-    ("open_questions", "array of strings", False),
+    ("next_steps", "array of strings (old form; give tasks instead)", False),
+    (
+        "tasks",
+        "array of {text: string, status?: \"todo\"|\"in_progress\"|\"done\", from?: \"user\"|\"ai\", "
+        "quote?: string, depends_on?: array of strings, order?: integer}; required unless "
+        "next_steps is given",
+        False,
+    ),
+    ("user_turns", "array of strings", False),
+    (
+        "facts",
+        "array of {key: string, value: string, valid_from?: string, superseded_by?: string}",
+        False,
+    ),
+    ("open_questions", "array of strings or {text: string, waiting_on_user?: boolean}", False),
     ("verbatim", "array of {label: string, content: string}", False),
     ("last_exchange", "object {user: string, assistant: string}", False),
     ("notes_for_next_ai", "string", False),
@@ -146,7 +202,7 @@ COMPACTION_FIELDS = (
     ("client", "string or null", False),
 )
 
-_NESTED = ("decisions", "verbatim", "last_exchange", "workspace")
+_NESTED = ("decisions", "verbatim", "last_exchange", "workspace", "tasks", "facts", "open_questions")
 
 
 def compaction_system_prompt() -> str:
