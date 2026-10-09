@@ -40,3 +40,24 @@
 - Tests: 351 passed, 1 failed (known `test_product_code_unchanged`, passes after commit).
 - User-visible changes: save_checkpoint tool description sentence reworded; resumed saves now interpret `depends_on` positionally (an id beyond the list length is rejected as unknown task).
 - Notes: `plan_updates` dependency semantics untouched (still real ids). QA non-blocking notes not addressed.
+
+## F-004 attempt 1
+- What changed: `errors.py` new `CheckError(ValidationError)` (all problems in one "Save rejected: N problems found..." message, `.problems` list). `structured.py` `norm_text` (NFKC, casefold, punctuation/control -> space, word-boundary padded substring match) and `run_checks` (quote not found, quote missing, no unfinished task; all reported together). `store.py` calls `run_checks` after build/redaction, before the lock, so nothing is written and no id is consumed. `schema.py` `tasks` field description now says "numbers them for you; in depends_on, task k of your list is t-k" (F-003 QA note; SAVE_DESCRIPTION unchanged so the pinned hash did not change). `docs/DESIGN-v2.md` §8: one sentence saying "Task t-k" in messages is the position in the model's list. `tests/test_checks.py` new (11 tests incl. MCP isError); `tests/test_plan.py::test_next_action_shows_quote_for_user_task` now passes `user_turns` (its from=user quote needs evidence).
+- How to run it: `cd ai-checkpoint && $HOME/aic-venv/bin/python -m pytest -q`
+- Tests: see result below.
+- User-visible changes: save_checkpoint now rejects from=user tasks whose quote is missing/not in user_turns or last_exchange.user, and plans with no unfinished task; `tasks` field description reworded. Old next_steps-only saves are unaffected (derived quotes never checked).
+- Notes: checks 1/2 apply only when `tasks` is supplied; plan_updates checks and parent user_turns as evidence arrive with F-005 carry-forward (until then a resumed save must re-supply the user turns it quotes). No decision-reason heuristic (dropped in the F-001 amendment).
+
+## F-004 attempt 2
+- What changed: `model.py` `_next_steps`: an explicitly empty plan (`tasks: []` with no/empty `next_steps`) now raises `CheckError` with the check-3 "no unfinished task" text instead of "next_steps: is required". Neither field given still gives the old error; `tasks: []` plus non-empty `next_steps` still saves. `tests/test_checks.py`: new `test_empty_tasks_gets_unfinished_task_error_nothing_written`.
+- How to run it: `cd ai-checkpoint && $HOME/aic-venv/bin/python -m pytest -q`
+- Tests: 1 failed (known `test_product_code_unchanged`), rest passed (see run).
+- User-visible changes: `tasks: []` error text changed as above.
+- Notes: QA notes (apostrophe handling, parent user_turns carry-forward) deferred; carry-forward belongs to F-005.
+
+## F-004 attempt 3
+- What changed: `server.py` `save_checkpoint`: `tasks` is now `Optional[List[TaskIn]] = None` and is forwarded when `is not None`, so an explicit `tasks: []` reaches the check instead of being dropped. `tests/test_checks.py`: new in-process MCP test (empty tasks -> "Save rejected: 1 problem found ... no unfinished task", nothing written; no plan at all keeps "next_steps: is required").
+- How to run it: `cd ai-checkpoint && $HOME/aic-venv/bin/python -m pytest -q`
+- Tests: 1 failed (known `test_product_code_unchanged`), rest passed.
+- User-visible changes: MCP `tasks: []` now returns the "no unfinished task" error; the tool's input schema for `tasks` is now nullable with default null instead of default [].
+- Notes: none.

@@ -104,7 +104,7 @@ def test_brief_opens_with_next_action_then_user_plan(store):
 
 def test_next_action_shows_quote_for_user_task(store):
     r = save(store, [T("write report", **{"from": "user"}, quote="then write the report")],
-             checkpoint_name="p5")
+             checkpoint_name="p5", user_turns=["Then write the report."])
     brief = render_brief(store.get(r.checkpoint_id))
     assert '**[t-1]** write report\nThe user said: "then write the report"' in brief
 

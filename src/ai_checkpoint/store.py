@@ -303,6 +303,7 @@ class GitStore:
                     "resumed_from", f"no checkpoint matches {cp.resumed_from!r}") from None
 
         cp.v2 = _structured.build(clean, cp, self._task_base(cp.resumed_from))
+        _structured.run_checks(clean, cp, cp.v2)
         cp.decisions = [d for d, row in zip(cp.decisions, cp.v2.decisions)
                         if row["status"] == "active"]
         cp.next_steps = _bundle.next_steps_from_tasks(cp.v2.tasks)

@@ -72,7 +72,7 @@ FIELD_DESCRIPTIONS = {
     "tasks": (
         "The plan: ordered steps, the user's own steps first. Each {text, status, from, quote, "
         "depends_on?, order?}. Give this instead of next_steps. At least one task must be todo "
-        "or in_progress. The server numbers them t-1, t-2, ... in the order you give."
+        "or in_progress. The server numbers them for you; in depends_on, task k of your list is t-k."
     ),
     "tasks.text": "What to do: one concrete step the next AI can follow without asking.",
     "tasks.status": "todo, in_progress or done. Steps already finished are listed too, as done.",

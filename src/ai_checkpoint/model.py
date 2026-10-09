@@ -198,6 +198,12 @@ def _next_steps(v: Any, tasks: Any) -> list:
             text = _req_str(t.get("text"), f"tasks[{i}].text")
             steps.append(f"User's plan: {text}" if t.get("from") == "user" else text)
         return steps
+    if (v is None or (isinstance(v, (list, tuple)) and not v)) and isinstance(tasks, (list, tuple)):
+        # an explicitly empty plan (`tasks: []`): the "no unfinished task" check (DESIGN section 8)
+        from .errors import CheckError
+        raise CheckError(["The plan has no unfinished task (every task is done, or there are no "
+                          "tasks). Add at least one task with status todo or in_progress for "
+                          "what happens next."])
     if v is None or (isinstance(v, (list, tuple)) and not v):
         raise ValidationError("next_steps", "is required: give `tasks` (preferred) or `next_steps`")
     return _str_list(v, "next_steps", required=True)

@@ -7,11 +7,12 @@ open questions. Stdlib only. See docs/DESIGN-v2.md sections 5, 7 and 9.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional
 
 from . import bundle as _bundle
-from .errors import ValidationError
+from .errors import CheckError, ValidationError
 from .model import Checkpoint, _rejected_dict
 
 TASK_STATUS = ("todo", "in_progress", "done")
@@ -219,6 +220,50 @@ def build(data: Mapping, cp: Checkpoint, task_base: int = 0) -> V2:
                 raise _err(f"open_questions[{i}].waiting_on_user", "must be true or false")
         v2.questions.append({"id": f"q-{i + 1}", "text": text, "waiting_on_user": waiting})
     return v2
+
+
+# ------------------------------------------------------------ save-time checks
+def norm_text(s: str) -> str:
+    """NFKC, casefold, punctuation/control/format -> space, collapse whitespace (DESIGN §8)."""
+    out = []
+    for ch in unicodedata.normalize("NFKC", s).casefold():
+        out.append(" " if unicodedata.category(ch)[0] in "PC" else ch)
+    return " ".join("".join(out).split())
+
+
+def run_checks(data: Mapping, cp: Checkpoint, v2: V2) -> None:
+    """Raise one CheckError listing every failing check (DESIGN §8). Input is already redacted.
+
+    Checks 1 and 2 (user-task quotes) apply only when the save gives ``tasks`` (new tasks);
+    tasks derived from old ``next_steps`` are never quote-checked. Check 3 applies to every save.
+    """
+    problems: List[str] = []
+    raw_tasks = _list(data.get("tasks"), "tasks")
+    if raw_tasks:
+        pool = [" " + norm_text(t["text"]) + " " for t in v2.user_turns]
+        if cp.last_exchange.user.strip():
+            pool.append(" " + norm_text(cp.last_exchange.user) + " ")
+        for k, t in enumerate(v2.tasks, 1):
+            if t["from"] != "user":
+                continue
+            quote = t.get("quote")
+            if not quote:
+                problems.append(f"Task t-{k} is from=user but has no quote. Give the user's exact "
+                                'words as quote, or set from to "ai".')
+                continue
+            nq = norm_text(quote)
+            if not nq or not any(" " + nq + " " in turn for turn in pool):
+                problems.append(
+                    f"Task t-{k} is from=user but its quote was not found in user_turns or "
+                    f'last_exchange.user: "{quote}". Copy the user\'s exact words from the '
+                    "conversation into user_turns (or last_exchange.user) and use the same words "
+                    'as the quote, or set from to "ai".')
+    if all(t["status"] == "done" for t in v2.tasks):
+        problems.append("The plan has no unfinished task (every task is done, or there are no "
+                        "tasks). Add at least one task with status todo or in_progress for what "
+                        "happens next.")
+    if problems:
+        raise CheckError(problems)
 
 
 def from_flat(cp: Checkpoint) -> V2:

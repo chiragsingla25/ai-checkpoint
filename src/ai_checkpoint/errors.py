@@ -15,6 +15,21 @@ class ValidationError(CheckpointError, ValueError):
         super().__init__(f"{field}: {message}")
 
 
+class CheckError(ValidationError):
+    """Save-time checks failed. ``problems`` lists every failing check; nothing was written."""
+
+    def __init__(self, problems: list):
+        self.problems = list(problems)
+        n = len(self.problems)
+        head = (f"Save rejected: {n} problem{'s' if n != 1 else ''} found. Nothing was saved. "
+                "Fix all of them and call save_checkpoint again.")
+        text = head + "".join(f"\n{i}. {m}" for i, m in enumerate(self.problems, 1))
+        super().__init__("checks", text)
+
+    def __str__(self) -> str:
+        return self.message
+
+
 class NotFoundError(CheckpointError, LookupError):
     """A checkpoint ref did not resolve. ``ref`` is the ref as given."""
 

@@ -168,7 +168,7 @@ def create_server(store: Optional[GitStore] = None):
         objective: str = Field(description=FD["objective"]),
         current_step: str = Field(description=FD["current_step"]),
         next_steps: List[str] = Field(default_factory=list, description=FD["next_steps"]),
-        tasks: List[TaskIn] = Field(default_factory=list, description=FD["tasks"]),
+        tasks: Optional[List[TaskIn]] = Field(default=None, description=FD["tasks"]),
         user_turns: List[str] = Field(default_factory=list, description=FD["user_turns"]),
         facts: List[FactIn] = Field(default_factory=list, description=FD["facts"]),
         context: str = Field(default="", description=FD["context"]),
@@ -193,7 +193,7 @@ def create_server(store: Optional[GitStore] = None):
             workspace=workspace.model_dump() if workspace else None,
             client=client, resumed_from=resumed_from,
         )
-        if tasks:
+        if tasks is not None:  # an explicit [] reaches the "no unfinished task" check
             data["tasks"] = [t.model_dump(by_alias=True, exclude_none=True) for t in tasks]
         if user_turns:
             data["user_turns"] = user_turns
