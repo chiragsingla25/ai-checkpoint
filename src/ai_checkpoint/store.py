@@ -29,8 +29,8 @@ from typing import Any, Callable, Iterator, List, Mapping, Optional, Union
 from . import brief as _brief
 from . import bundle as _bundle
 from . import structured as _structured
-from .errors import NotFoundError, StoreError, ValidationError
-from .model import ID_RE, Checkpoint, format_id, id_number
+from .errors import NotFoundError, RequestError, StoreError, ValidationError
+from .model import ID_RE, WORKSPACE_CATEGORIES, Checkpoint, format_id, id_number
 from .redact import redact_obj
 
 ENV_HOME = "AI_CHECKPOINT_HOME"
@@ -294,6 +294,14 @@ class GitStore:
         resumed_raw = raw.get("resumed_from")
         # Redact first so secrets can never reach disk, the commit message or validation errors.
         clean = {k: (v if k == "resumed_from" else redact_obj(v)) for k, v in raw.items()}
+        plan_updates = clean.get("plan_updates")
+        if plan_updates is not None:
+            if clean.get("tasks") is not None:
+                raise RequestError("Give either tasks (a new plan) or plan_updates (changes to the "
+                                   "parent's plan), not both.")
+            if not clean.get("resumed_from"):
+                raise RequestError("plan_updates needs resumed_from: pass the id of the checkpoint "
+                                   "this chat was resumed from.")
         cp = Checkpoint.from_dict(clean)
         if cp.resumed_from is not None:
             try:
@@ -302,11 +310,30 @@ class GitStore:
                 raise ValidationError(
                     "resumed_from", f"no checkpoint matches {cp.resumed_from!r}") from None
 
-        cp.v2 = _structured.build(clean, cp, self._task_base(cp.resumed_from))
-        _structured.run_checks(clean, cp, cp.v2)
-        cp.decisions = [d for d, row in zip(cp.decisions, cp.v2.decisions)
-                        if row["status"] == "active"]
+        parent = parent_v2 = None
+        if cp.resumed_from is not None:
+            parent = self.get(cp.resumed_from)
+            parent_v2 = parent.v2 if parent.v2 is not None else _structured.from_flat(parent)
+        # Every save of a resumed chat carries the sections it does not supply forward
+        # (DESIGN-v2 s.11). A structured save merges its sections into the parent's; an
+        # old-fields-only save replaces a supplied section wholesale.
+        carry = parent_v2 is not None
+        merge = any(clean.get(k) is not None for k in ("tasks", "plan_updates", "user_turns", "facts"))
+        base = _structured.max_task_number(parent_v2.tasks) if parent_v2 is not None else 0
+        cp.v2 = _structured.build(clean, cp, base, parent_v2 if carry else None, replace=not merge)
+        new_tasks = None
+        if plan_updates is not None:
+            cp.v2.tasks, new_tasks = _structured.apply_plan_updates(
+                parent_v2.tasks, plan_updates, cp.resumed_from, base)
+        if carry:
+            cp.decisions = _structured.decisions_flat(cp.v2.decisions)
+            cp.open_questions = [q["text"] for q in cp.v2.questions]
+            self._carry_flat(cp, parent, clean, merge)
+        else:
+            cp.decisions = [d for d, row in zip(cp.decisions, cp.v2.decisions)
+                            if row["status"] == "active"]
         cp.next_steps = _bundle.next_steps_from_tasks(cp.v2.tasks)
+        _structured.run_checks(clean, cp, cp.v2, new_tasks)
 
         self._ensure_repo()
         with self._lock():
@@ -371,6 +398,30 @@ class GitStore:
             with contextlib.suppress(OSError):
                 chat_dir.rmdir()
         self._git("reset", "-q", "--", *paths, check=False)
+
+    @staticmethod
+    def _carry_flat(cp: Checkpoint, parent: Checkpoint, clean: Mapping, merge: bool) -> None:
+        """Workspace (merged by category and key; replaced wholesale if supplied by an
+        old-fields-only save) and verbatim (replaced if supplied)."""
+        if not merge:
+            if clean.get("workspace") is None:
+                cp.workspace = {c: [dict(i) for i in items] for c, items in parent.workspace.items()}
+            if clean.get("verbatim") is None:
+                cp.verbatim = list(parent.verbatim)
+            return
+        merged = {}
+        for cat, (key, _o, _l) in WORKSPACE_CATEGORIES.items():
+            items = [dict(i) for i in parent.workspace.get(cat, [])]
+            for new in cp.workspace.get(cat, []):
+                at = next((n for n, old in enumerate(items) if old.get(key) == new.get(key)), None)
+                if at is None:
+                    items.append(dict(new))
+                else:
+                    items[at] = dict(new)
+            merged[cat] = items
+        cp.workspace = merged
+        if clean.get("verbatim") is None:
+            cp.verbatim = list(parent.verbatim)
 
     def _task_base(self, parent_id: Optional[str]) -> int:
         """Highest task number in the parent's plan (task ids continue from it)."""

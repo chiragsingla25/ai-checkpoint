@@ -172,7 +172,7 @@ class Checkpoint:
             checkpoint_name=_name(g("checkpoint_name"), "checkpoint_name", allow_slash=True),
             objective=_req_str(g("objective"), "objective"),
             current_step=_req_str(g("current_step"), "current_step"),
-            next_steps=_next_steps(g("next_steps"), g("tasks")),
+            next_steps=_next_steps(g("next_steps"), g("tasks"), g("plan_updates")),
             context=_opt_str(g("context"), "context"),
             decisions=_decisions(g("decisions")),
             completed=_str_list(g("completed"), "completed"),
@@ -188,7 +188,7 @@ class Checkpoint:
         )
 
 
-def _next_steps(v: Any, tasks: Any) -> list:
+def _next_steps(v: Any, tasks: Any, plan_updates: Any = None) -> list:
     """``next_steps`` as given, or (when absent) the texts of ``tasks`` in the old step form."""
     if (v is None or (isinstance(v, (list, tuple)) and not v)) and isinstance(tasks, (list, tuple)) and tasks:
         steps = []
@@ -198,6 +198,9 @@ def _next_steps(v: Any, tasks: Any) -> list:
             text = _req_str(t.get("text"), f"tasks[{i}].text")
             steps.append(f"User's plan: {text}" if t.get("from") == "user" else text)
         return steps
+    if (v is None or (isinstance(v, (list, tuple)) and not v)) and plan_updates is not None \
+            and tasks is None:
+        return []  # the plan comes from the parent plus plan_updates (store.save)
     if (v is None or (isinstance(v, (list, tuple)) and not v)) and isinstance(tasks, (list, tuple)):
         # an explicitly empty plan (`tasks: []`): the "no unfinished task" check (DESIGN section 8)
         from .errors import CheckError

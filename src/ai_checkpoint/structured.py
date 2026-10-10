@@ -6,6 +6,7 @@ open questions. Stdlib only. See docs/DESIGN-v2.md sections 5, 7 and 9.
 """
 from __future__ import annotations
 
+import copy
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -13,7 +14,7 @@ from typing import Any, Dict, List, Mapping, Optional
 
 from . import bundle as _bundle
 from .errors import CheckError, ValidationError
-from .model import Checkpoint, _rejected_dict
+from .model import Checkpoint, Decision, Rejected, _rejected_dict
 
 TASK_STATUS = ("todo", "in_progress", "done")
 TASK_FROM = ("user", "ai")
@@ -145,8 +146,20 @@ def check_dependencies(tasks: List[dict], name: str) -> None:
 
 
 # ------------------------------------------------------------------ build
-def build(data: Mapping, cp: Checkpoint, task_base: int = 0) -> V2:
-    """Validate the structured fields of ``data`` (already redacted) against ``cp``."""
+def _num(item_id: str) -> int:
+    m = re.match(r"^[a-z]-(\d+)$", str(item_id))
+    return int(m.group(1)) if m else 0
+
+
+def build(data: Mapping, cp: Checkpoint, task_base: int = 0, parent: Optional[V2] = None,
+          replace: bool = False) -> V2:
+    """Validate the structured fields of ``data`` (already redacted) against ``cp``.
+
+    With ``parent`` (a structured save of a resumed chat) the parent's decisions, facts, user
+    turns and open questions are carried forward first; new items continue their numbering.
+    With ``replace`` (an old-fields-only resumed save) a supplied ``decisions`` list replaces the
+    parent's decisions instead of being appended to them.
+    """
     raw_tasks = _list(data.get("tasks"), "tasks")
     if raw_tasks:
         tasks = _parse_tasks(raw_tasks, task_base)
@@ -155,6 +168,14 @@ def build(data: Mapping, cp: Checkpoint, task_base: int = 0) -> V2:
         for t in tasks:
             t["id"] = f"t-{task_base + task_number(t['id'])}"
     v2 = V2(tasks=tasks)
+    d_base = f_base = 0
+    if parent is not None:
+        if not (replace and _list(data.get("decisions"), "decisions")):
+            v2.decisions = copy.deepcopy(parent.decisions)
+        v2.facts = copy.deepcopy(parent.facts)
+        v2.user_turns = copy.deepcopy(parent.user_turns)
+        d_base = max([_num(d["id"]) for d in v2.decisions] + [0])
+        f_base = max([_num(f["id"]) for f in v2.facts] + [0])
 
     raw_dec = _list(data.get("decisions"), "decisions")
     for i, d in enumerate(cp.decisions):
@@ -164,14 +185,15 @@ def build(data: Mapping, cp: Checkpoint, task_base: int = 0) -> V2:
         if status not in DECISION_STATUS:
             raise _err(f"{at}.status", f"must be one of {', '.join(DECISION_STATUS)}, got {status!r}")
         sup = _opt(item, "supersedes", at)
-        v2.decisions.append({"id": f"d-{i + 1}", "decision": d.decision, "reason": d.reason,
+        v2.decisions.append({"id": f"d-{d_base + i + 1}", "decision": d.decision, "reason": d.reason,
                              "rejected": [_rejected_dict(r) for r in d.rejected],
                              "status": status, "supersedes": sup})
     ids = {d["id"]: n for n, d in enumerate(v2.decisions)}
-    for i, d in enumerate(v2.decisions):
+    for n, d in enumerate(v2.decisions):
+        i = n - len(v2.decisions) + len(cp.decisions)  # index in the save's own list
         sup = d["supersedes"]
-        if sup is not None:
-            if sup not in ids or ids[sup] >= i:
+        if sup is not None and i >= 0:
+            if sup not in ids or ids[sup] >= n:
                 raise _err(f"decisions[{i}].supersedes",
                            f"unknown decision {sup} (name an earlier decision in this list, "
                            "such as d-1)")
@@ -179,18 +201,24 @@ def build(data: Mapping, cp: Checkpoint, task_base: int = 0) -> V2:
 
     raw_facts = _list(data.get("facts"), "facts")
     active: Dict[str, dict] = {}
+    for f in v2.facts:
+        if f["superseded_by"] is None:
+            active[_norm_key(f["key"])] = f
     for i, item in enumerate(raw_facts):
         at = f"facts[{i}]"
         if not isinstance(item, Mapping):
             raise _err(at, f"must be an object, got {type(item).__name__}")
-        fact = {"id": f"f-{i + 1}", "key": _req(item, "key", at), "value": _req(item, "value", at),
+        fact = {"id": f"f-{f_base + i + 1}", "key": _req(item, "key", at), "value": _req(item, "value", at),
                 "valid_from": _opt(item, "valid_from", at),
                 "superseded_by": _opt(item, "superseded_by", at)}
         v2.facts.append(fact)
     fids = {f["id"] for f in v2.facts}
+    n_old = len(v2.facts) - len(raw_facts)
     for i, f in enumerate(v2.facts):
+        if i < n_old:
+            continue
         if f["superseded_by"] is not None and f["superseded_by"] not in fids:
-            raise _err(f"facts[{i}].superseded_by", f"unknown fact {f['superseded_by']}")
+            raise _err(f"facts[{i - n_old}].superseded_by", f"unknown fact {f['superseded_by']}")
         k = _norm_key(f["key"])
         prev = active.get(k)
         if prev is not None and prev["superseded_by"] is None:
@@ -198,17 +226,24 @@ def build(data: Mapping, cp: Checkpoint, task_base: int = 0) -> V2:
         active[k] = f
 
     raw_turns = _list(data.get("user_turns"), "user_turns")
-    seen = set()
+    seen = {norm_text(t["text"]) or t["text"] for t in v2.user_turns}
+
+    def add_turn(t: str) -> None:  # duplicates are dropped after normalisation (DESIGN 5.7)
+        key = norm_text(t) or t
+        if t.strip() and key not in seen:
+            seen.add(key)
+            v2.user_turns.append({"n": len(v2.user_turns) + 1, "text": t})
+
     for i, t in enumerate(raw_turns):
         if not isinstance(t, str):
             raise _err(f"user_turns[{i}]", f"must be a string, got {type(t).__name__}")
-        if t.strip() and t not in seen:
-            seen.add(t)
-            v2.user_turns.append({"n": len(v2.user_turns) + 1, "text": t})
+        add_turn(t)
     if not raw_turns and cp.last_exchange.user.strip():
-        v2.user_turns.append({"n": 1, "text": cp.last_exchange.user})
+        add_turn(cp.last_exchange.user)
 
     raw_q = _list(data.get("open_questions"), "open_questions")
+    if parent is not None and data.get("open_questions") is None:
+        v2.questions = copy.deepcopy(parent.questions)  # not supplied: carried forward
     for i, text in enumerate(cp.open_questions):
         item = raw_q[i] if i < len(raw_q) else None
         waiting = False
@@ -222,6 +257,83 @@ def build(data: Mapping, cp: Checkpoint, task_base: int = 0) -> V2:
     return v2
 
 
+# ------------------------------------------------------- carry-forward
+def apply_plan_updates(parent_tasks: List[dict], updates: Any, parent_id: str,
+                       base: int) -> "tuple[List[dict], List[tuple]]":
+    """The parent's plan with ``plan_updates`` applied (DESIGN-v2 section 11).
+
+    Returns (tasks, new) where ``new`` lists (label, task) for the tasks added by this save.
+    """
+    if not isinstance(updates, (list, tuple)):
+        raise _err("plan_updates", f"must be a list, got {type(updates).__name__}")
+    tasks = copy.deepcopy(parent_tasks)  # keeps ids, text, from, quote, raw, order
+    by_id = {t["id"]: t for t in tasks}
+    known = ", ".join(t["id"] for t in tasks)
+    touched: List[tuple] = []
+    new: List[tuple] = []
+    top_order = max([t["order"] for t in tasks] + [0])
+    for i, item in enumerate(updates):
+        at = f"plan_updates[{i}]"
+        if not isinstance(item, Mapping):
+            raise _err(at, f"must be an object, got {type(item).__name__}")
+        tid = item.get("id")
+        status = item.get("status")
+        if status is not None and status not in TASK_STATUS:
+            raise _err(f"{at}.status", f"must be one of {', '.join(TASK_STATUS)}, got {status!r}")
+        order = item.get("order")
+        if order is not None and (isinstance(order, bool) or not isinstance(order, int)):
+            raise _err(f"{at}.order", f"must be an integer, got {type(order).__name__}")
+        deps = item.get("depends_on")
+        if deps is not None and (not isinstance(deps, (list, tuple))
+                                 or not all(isinstance(d, str) for d in deps)):
+            raise _err(f"{at}.depends_on", "must be a list of task ids such as [\"t-1\"]")
+        if tid is not None:
+            if not isinstance(tid, str) or tid.strip() not in by_id:
+                raise _err(at, f"unknown task id {tid} (parent {parent_id} has {known}).")
+            t = by_id[tid.strip()]
+            if item.get("text") is not None:
+                raise _err(at, f"task {t['id']} cannot be reworded; only status, depends_on and "
+                               "order can change. Add a new task instead.")
+            if item.get("from") is not None or item.get("quote") is not None:
+                raise _err(at, f"task {t['id']} cannot change from or quote; only status, "
+                               "depends_on and order can change.")
+            if status is not None:
+                t["status"] = status
+            if order is not None:
+                t["order"] = order
+            if deps is not None:
+                t["depends_on"] = [d.strip() for d in deps]
+            touched.append((at, t))
+            continue
+        frm = item.get("from") or "ai"
+        if frm not in TASK_FROM:
+            raise _err(f"{at}.from", f"must be one of {', '.join(TASK_FROM)}, got {frm!r}")
+        text = _req(item, "text", at)
+        j = len(new) + 1
+        t = {"id": f"t-{base + j}", "text": text, "status": status or "todo", "from": frm,
+             "quote": _opt(item, "quote", at) if frm == "user" else None,
+             "depends_on": [d.strip() for d in (deps or [])],
+             "order": order if order is not None else top_order + 10 * j}
+        tasks.append(t)
+        by_id[t["id"]] = t
+        touched.append((at, t))
+        new.append((f'New task "{text[:40]}"', t))
+    for at, t in touched:
+        for d in t["depends_on"]:
+            if d not in by_id:
+                raise _err(f"{at}.depends_on", f"unknown task {d}")
+    check_dependencies(tasks, "plan")
+    return tasks, new
+
+
+def decisions_flat(rows: List[dict]) -> List[Decision]:
+    """Active decision rows as the flat ``Decision`` view."""
+    return [Decision(decision=r["decision"], reason=r["reason"],
+                     rejected=[Rejected(option=x["option"], how_far=x["how_far"],
+                                        note=x.get("note", "")) for x in r.get("rejected", [])])
+            for r in rows if r["status"] == "active"]
+
+
 # ------------------------------------------------------------ save-time checks
 def norm_text(s: str) -> str:
     """NFKC, casefold, punctuation/control/format -> space, collapse whitespace (DESIGN §8)."""
@@ -231,7 +343,7 @@ def norm_text(s: str) -> str:
     return " ".join("".join(out).split())
 
 
-def run_checks(data: Mapping, cp: Checkpoint, v2: V2) -> None:
+def run_checks(data: Mapping, cp: Checkpoint, v2: V2, new_tasks: Optional[list] = None) -> None:
     """Raise one CheckError listing every failing check (DESIGN §8). Input is already redacted.
 
     Checks 1 and 2 (user-task quotes) apply only when the save gives ``tasks`` (new tasks);
@@ -239,22 +351,24 @@ def run_checks(data: Mapping, cp: Checkpoint, v2: V2) -> None:
     """
     problems: List[str] = []
     raw_tasks = _list(data.get("tasks"), "tasks")
-    if raw_tasks:
+    if new_tasks is None and raw_tasks:
+        new_tasks = [(f"Task t-{k}", t) for k, t in enumerate(v2.tasks, 1)]
+    if new_tasks:
         pool = [" " + norm_text(t["text"]) + " " for t in v2.user_turns]
         if cp.last_exchange.user.strip():
             pool.append(" " + norm_text(cp.last_exchange.user) + " ")
-        for k, t in enumerate(v2.tasks, 1):
+        for label, t in new_tasks:
             if t["from"] != "user":
                 continue
             quote = t.get("quote")
             if not quote:
-                problems.append(f"Task t-{k} is from=user but has no quote. Give the user's exact "
+                problems.append(f"{label} is from=user but has no quote. Give the user's exact "
                                 'words as quote, or set from to "ai".')
                 continue
             nq = norm_text(quote)
             if not nq or not any(" " + nq + " " in turn for turn in pool):
                 problems.append(
-                    f"Task t-{k} is from=user but its quote was not found in user_turns or "
+                    f"{label} is from=user but its quote was not found in user_turns or "
                     f'last_exchange.user: "{quote}". Copy the user\'s exact words from the '
                     "conversation into user_turns (or last_exchange.user) and use the same words "
                     'as the quote, or set from to "ai".')

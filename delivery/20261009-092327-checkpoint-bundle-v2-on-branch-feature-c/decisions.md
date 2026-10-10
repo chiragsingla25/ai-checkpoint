@@ -16,3 +16,15 @@ Plan approved as written: 6 features on branch feature/checkpoint-bundle-v2; pus
 ## F-003 task numbering on resumed saves (QA finding, attempt 1)
 - Ruling (orchestrator, technical; reported to Chirag): in a fresh `tasks` list, `depends_on` is read positionally — `t-k` means the k-th item of THIS list — and the server rewrites it to the id actually assigned (t-(N+k), continuing from the lineage max). Ids are never reused. DESIGN-v2 §7's sentence "depends_on refers to tasks in the same list by the id they will receive" is replaced accordingly, and SAVE_DESCRIPTION says "the server numbers them for you; in depends_on, task k of your list is t-k".
 - Reason: a small model following the tool text must get the dependencies it meant; positional ids need no knowledge of the parent's highest id.
+
+## F-005 criterion 4 scope (QA objection, attempt 1)
+- Question: do old-fields-only resumed saves carry forward unmentioned parent sections?
+- Ruling (orchestrator, follows the approved request "saving from a resumed chat ... carried forward from the parent checkpoint instead of rewriting"; reported to Chirag): YES — every save with resumed_from carries forward the sections it does not supply, whatever field style it uses. Sections it does supply replace the parent's. Does not count as an attempt.
+- Also fix: in `plan_updates`, depends_on text must state that ids refer to the real task ids shown in the brief (e.g. [t-3]), not list positions, so the model can't silently get a wrong dependency.
+- Clarification on duplicates (QA trade-off): for an old-fields-only resumed save, a section it supplies REPLACES the parent's section wholesale (no merge, so restated decisions are not duplicated); sections it omits are carried. Structured saves keep the DESIGN-v2 merge behaviour.
+
+## F-005 criterion 4 — ruling by Chirag (2026-10-10), overrides the orchestrator's ruling above
+- Ruling: option (a). Carry-forward applies only to resumed saves that use the structured fields (tasks, plan_updates, user_turns or facts). An old-fields-only resumed save behaves as before: nothing is carried.
+- Reason: owner's call; keeps old-style saves unchanged and steers resumed chats to the new style.
+- Effect: criterion 4 reworded to QA's proposed wording (a) in features.json. The builder's attempt 1 already implements (a), so no code change is needed for this criterion. The orchestrator's "carry for every resumed save" ruling and its old-fields replace-wholesale clarification are withdrawn.
+- Still open from the orchestrator's entry: its extra request that the plan_updates depends_on text say ids are the real task ids shown in the brief. That is not a written criterion; QA should treat it as a Note unless Chirag adopts it.

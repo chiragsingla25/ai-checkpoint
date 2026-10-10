@@ -71,6 +71,19 @@ class TaskIn(BaseModel):
     order: Optional[int] = Field(default=None, description=FD["tasks.order"])
 
 
+class PlanUpdateIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    id: Optional[str] = Field(default=None, description=FD["plan_updates.id"])
+    text: Optional[str] = Field(default=None, description=FD["plan_updates.text"])
+    status: Optional[Literal["todo", "in_progress", "done"]] = Field(
+        default=None, description=FD["tasks.status"])
+    from_: Optional[Literal["user", "ai"]] = Field(
+        default=None, alias="from", description=FD["tasks.from"])
+    quote: Optional[str] = Field(default=None, description=FD["tasks.quote"])
+    depends_on: Optional[List[str]] = Field(default=None, description=FD["plan_updates.depends_on"])
+    order: Optional[int] = Field(default=None, description=FD["tasks.order"])
+
+
 class FactIn(BaseModel):
     key: str = Field(description=FD["facts.key"])
     value: str = Field(description=FD["facts.value"])
@@ -169,14 +182,16 @@ def create_server(store: Optional[GitStore] = None):
         current_step: str = Field(description=FD["current_step"]),
         next_steps: List[str] = Field(default_factory=list, description=FD["next_steps"]),
         tasks: Optional[List[TaskIn]] = Field(default=None, description=FD["tasks"]),
+        plan_updates: Optional[List[PlanUpdateIn]] = Field(
+            default=None, description=FD["plan_updates"]),
         user_turns: List[str] = Field(default_factory=list, description=FD["user_turns"]),
         facts: List[FactIn] = Field(default_factory=list, description=FD["facts"]),
         context: str = Field(default="", description=FD["context"]),
         decisions: List[DecisionIn] = Field(default_factory=list, description=FD["decisions"]),
         completed: List[str] = Field(default_factory=list, description=FD["completed"]),
-        open_questions: List[Union[str, QuestionIn]] = Field(
-            default_factory=list, description=FD["open_questions"]),
-        verbatim: List[VerbatimIn] = Field(default_factory=list, description=FD["verbatim"]),
+        open_questions: Optional[List[Union[str, QuestionIn]]] = Field(
+            default=None, description=FD["open_questions"]),
+        verbatim: Optional[List[VerbatimIn]] = Field(default=None, description=FD["verbatim"]),
         last_exchange: LastExchangeIn = Field(default_factory=LastExchangeIn, description=FD["last_exchange"]),
         notes_for_next_ai: str = Field(default="", description=FD["notes_for_next_ai"]),
         workspace: Optional[WorkspaceIn] = Field(default=None, description=FD["workspace"]),
@@ -187,14 +202,18 @@ def create_server(store: Optional[GitStore] = None):
             chat_name=chat_name, checkpoint_name=checkpoint_name, objective=objective,
             current_step=current_step, next_steps=next_steps, context=context,
             decisions=[d.model_dump(exclude_none=True) for d in decisions], completed=completed,
-            open_questions=[q if isinstance(q, str) else q.model_dump() for q in open_questions],
-            verbatim=[v.model_dump() for v in verbatim],
+            open_questions=(None if open_questions is None else
+                            [q if isinstance(q, str) else q.model_dump() for q in open_questions]),
+            verbatim=None if verbatim is None else [v.model_dump() for v in verbatim],
             last_exchange=last_exchange.model_dump(), notes_for_next_ai=notes_for_next_ai,
             workspace=workspace.model_dump() if workspace else None,
             client=client, resumed_from=resumed_from,
         )
         if tasks is not None:  # an explicit [] reaches the "no unfinished task" check
             data["tasks"] = [t.model_dump(by_alias=True, exclude_none=True) for t in tasks]
+        if plan_updates is not None:
+            data["plan_updates"] = [u.model_dump(by_alias=True, exclude_none=True)
+                                    for u in plan_updates]
         if user_turns:
             data["user_turns"] = user_turns
         if facts:

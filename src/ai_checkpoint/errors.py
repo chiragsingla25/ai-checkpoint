@@ -15,6 +15,16 @@ class ValidationError(CheckpointError, ValueError):
         super().__init__(f"{field}: {message}")
 
 
+class RequestError(ValidationError):
+    """A request-level validation error whose message is the whole text (no field prefix)."""
+
+    def __init__(self, message: str):
+        super().__init__("request", message)
+
+    def __str__(self) -> str:
+        return self.message
+
+
 class CheckError(ValidationError):
     """Save-time checks failed. ``problems`` lists every failing check; nothing was written."""
 

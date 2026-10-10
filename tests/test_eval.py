@@ -247,7 +247,8 @@ def test_compaction_prompt_uses_save_instructions_and_field_descriptions():
     prompt = compaction_system_prompt()
     assert SAVE_INSTRUCTIONS in prompt and SAVE_DESCRIPTION.startswith(SAVE_INSTRUCTIONS)
     for key, text in FIELD_DESCRIPTIONS.items():
-        if key != "resumed_from":  # not applicable: the eval chat is never resumed
+        if key != "resumed_from" and not key.startswith("plan_updates"):
+            # not applicable: the eval chat is never resumed
             assert text in prompt, key
 
 
@@ -365,8 +366,10 @@ def test_api_failure_is_a_clean_model_error(monkeypatch):
 # became a one-line "old form" note. Wording kept short for small models.
 # F-003 attempt 2 (owner ruling): "numbers them for you; in depends_on, task k of your list is
 # t-k" replaced "numbers the tasks t-1, t-2, ..." -> len 3240 -> 3258, hash updated on purpose.
-_HEAD_SAVE_DESCRIPTION_SHA256 = "4f5dfdcadaf12d30bb25e5d3cd9a21d091e5f0763699ae3e0bff2140fa6df923"
-_HEAD_SAVE_DESCRIPTION_LEN = 3258
+# F-005: SAVE_TOOL_SUFFIX now tells a resumed chat to give `plan_updates` instead of `tasks`
+# -> len 3258 -> 3410, hash updated on purpose.
+_HEAD_SAVE_DESCRIPTION_SHA256 = "1804ca549cf20ae98303e9c749bb473e053f45d26fe4c66ad30591695b1747a9"
+_HEAD_SAVE_DESCRIPTION_LEN = 3410
 
 
 def test_save_description_matches_committed_head_text():

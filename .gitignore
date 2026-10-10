@@ -16,3 +16,5 @@ results/
 # local secrets (never commit)
 .env
 .env.*
+
+.DS_Store

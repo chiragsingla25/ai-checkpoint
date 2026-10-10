@@ -52,7 +52,9 @@ Pick a short, descriptive `checkpoint_name` (for example "forecasting-v2").\
 #: Only meaningful for a tool call (ids and commits come from the store).
 SAVE_TOOL_SUFFIX = (
     "If this chat was itself resumed from a checkpoint, pass that checkpoint's id as "
-    "`resumed_from` so the checkpoints form a branch tree. Returns the new checkpoint id "
+    "`resumed_from` so the checkpoints form a branch tree, and do not rewrite the plan: give "
+    "`plan_updates` instead of `tasks` ({id, status} changes a task shown in the brief; an item "
+    "without id is a new task). Returns the new checkpoint id "
     "and the git commit hash."
 )
 
@@ -74,6 +76,18 @@ FIELD_DESCRIPTIONS = {
         "depends_on?, order?}. Give this instead of next_steps. At least one task must be todo "
         "or in_progress. The server numbers them for you; in depends_on, task k of your list is t-k."
     ),
+    "plan_updates": (
+        "Only with resumed_from, instead of tasks. Changes to the parent checkpoint's plan: "
+        "{id, status?, depends_on?, order?} edits the task with that id (the id is shown in the "
+        "brief, e.g. t-2); an item without id is a new task {text, from, quote, status?}. "
+        "Tasks you do not mention stay as they were."
+    ),
+    "plan_updates.depends_on": (
+        "Optional. Ids of tasks that must be done first: the real task ids shown in the brief "
+        "(e.g. [\"t-3\"]) or the ids of new tasks in this list, NOT list positions."
+    ),
+    "plan_updates.id": "Id of an existing task from the brief, e.g. \"t-2\". Leave out for a new task.",
+    "plan_updates.text": "New tasks only: what to do. Existing tasks cannot be reworded.",
     "tasks.text": "What to do: one concrete step the next AI can follow without asking.",
     "tasks.status": "todo, in_progress or done. Steps already finished are listed too, as done.",
     "tasks.from": "\"user\" if the user asked for this step, \"ai\" if you propose it.",
