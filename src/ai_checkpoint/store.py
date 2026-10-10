@@ -314,13 +314,13 @@ class GitStore:
         if cp.resumed_from is not None:
             parent = self.get(cp.resumed_from)
             parent_v2 = parent.v2 if parent.v2 is not None else _structured.from_flat(parent)
-        # Every save of a resumed chat carries the sections it does not supply forward
-        # (DESIGN-v2 s.11). A structured save merges its sections into the parent's; an
-        # old-fields-only save replaces a supplied section wholesale.
-        carry = parent_v2 is not None
+        # Only a resumed save that uses the structured fields (tasks, plan_updates, user_turns,
+        # facts) carries the sections it does not supply forward and merges the ones it does
+        # (DESIGN-v2 s.11). An old-fields-only resumed save behaves as before: nothing carried.
         merge = any(clean.get(k) is not None for k in ("tasks", "plan_updates", "user_turns", "facts"))
+        carry = parent_v2 is not None and merge
         base = _structured.max_task_number(parent_v2.tasks) if parent_v2 is not None else 0
-        cp.v2 = _structured.build(clean, cp, base, parent_v2 if carry else None, replace=not merge)
+        cp.v2 = _structured.build(clean, cp, base, parent_v2 if carry else None)
         new_tasks = None
         if plan_updates is not None:
             cp.v2.tasks, new_tasks = _structured.apply_plan_updates(
@@ -328,7 +328,7 @@ class GitStore:
         if carry:
             cp.decisions = _structured.decisions_flat(cp.v2.decisions)
             cp.open_questions = [q["text"] for q in cp.v2.questions]
-            self._carry_flat(cp, parent, clean, merge)
+            self._carry_flat(cp, parent, clean)
         else:
             cp.decisions = [d for d, row in zip(cp.decisions, cp.v2.decisions)
                             if row["status"] == "active"]
@@ -400,15 +400,8 @@ class GitStore:
         self._git("reset", "-q", "--", *paths, check=False)
 
     @staticmethod
-    def _carry_flat(cp: Checkpoint, parent: Checkpoint, clean: Mapping, merge: bool) -> None:
-        """Workspace (merged by category and key; replaced wholesale if supplied by an
-        old-fields-only save) and verbatim (replaced if supplied)."""
-        if not merge:
-            if clean.get("workspace") is None:
-                cp.workspace = {c: [dict(i) for i in items] for c, items in parent.workspace.items()}
-            if clean.get("verbatim") is None:
-                cp.verbatim = list(parent.verbatim)
-            return
+    def _carry_flat(cp: Checkpoint, parent: Checkpoint, clean: Mapping) -> None:
+        """Workspace (merged by category and key) and verbatim (replaced if supplied)."""
         merged = {}
         for cat, (key, _o, _l) in WORKSPACE_CATEGORIES.items():
             items = [dict(i) for i in parent.workspace.get(cat, [])]

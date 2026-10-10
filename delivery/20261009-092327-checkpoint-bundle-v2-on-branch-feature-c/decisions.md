@@ -34,3 +34,6 @@ Plan approved as written: 6 features on branch feature/checkpoint-bundle-v2; pus
 - Ruling: fix it. New criterion 7 added to F-005: plan_updates depends_on has its own description (real ids from the brief, not positions).
 - Reason: same class of silent-wrong-dependency problem as F-003 attempt 1.
 - Effect: F-005 goes back to the builder (attempt 2), then a QA re-check.
+
+## Correction (orchestrator, 2026-10-10)
+- The statement above that "attempt 1 already implements (a)" was wrong. QA re-check (qa/F-005-attempt-2.md) found that the code committed as 9107b1e carries forward for every resumed save (`carry = parent_v2 is not None`). That is the withdrawn orchestrator ruling. The working tree had been changed after attempt-1 QA without a build-log entry, and the orchestrator committed it without re-verifying. F-005 goes back to the builder (attempt 3) to implement Chirag's ruling (a).

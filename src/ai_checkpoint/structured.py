@@ -151,14 +151,11 @@ def _num(item_id: str) -> int:
     return int(m.group(1)) if m else 0
 
 
-def build(data: Mapping, cp: Checkpoint, task_base: int = 0, parent: Optional[V2] = None,
-          replace: bool = False) -> V2:
+def build(data: Mapping, cp: Checkpoint, task_base: int = 0, parent: Optional[V2] = None) -> V2:
     """Validate the structured fields of ``data`` (already redacted) against ``cp``.
 
     With ``parent`` (a structured save of a resumed chat) the parent's decisions, facts, user
     turns and open questions are carried forward first; new items continue their numbering.
-    With ``replace`` (an old-fields-only resumed save) a supplied ``decisions`` list replaces the
-    parent's decisions instead of being appended to them.
     """
     raw_tasks = _list(data.get("tasks"), "tasks")
     if raw_tasks:
@@ -170,8 +167,7 @@ def build(data: Mapping, cp: Checkpoint, task_base: int = 0, parent: Optional[V2
     v2 = V2(tasks=tasks)
     d_base = f_base = 0
     if parent is not None:
-        if not (replace and _list(data.get("decisions"), "decisions")):
-            v2.decisions = copy.deepcopy(parent.decisions)
+        v2.decisions = copy.deepcopy(parent.decisions)
         v2.facts = copy.deepcopy(parent.facts)
         v2.user_turns = copy.deepcopy(parent.user_turns)
         d_base = max([_num(d["id"]) for d in v2.decisions] + [0])

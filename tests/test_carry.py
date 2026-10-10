@@ -208,36 +208,44 @@ def test_mcp_plan_updates(store):
     assert got.open_questions == ["Which holidays?"] and [v.content for v in got.verbatim] == ["make go"]
 
 
-def test_old_only_resumed_save_carries_omitted_sections(store):
+def test_old_only_resumed_save_carries_nothing(store):
+    # criterion 4 (option a): old-fields-only resumed save behaves as before F-005
     p = parent(store)
     r = store.save({**BASE, "checkpoint_name": "old", "resumed_from": p.checkpoint_id,
                     "next_steps": ["only this"]})
     cid = r.checkpoint_id
-    assert [d["decision"] for d in jl(store, cid, "decisions.jsonl")] == ["Use Prophet"]
-    assert [f["key"] for f in jl(store, cid, "facts.jsonl")] == ["freq"]
-    assert len(jl(store, cid, "user_turns.jsonl")) == 1
+    assert jl(store, cid, "decisions.jsonl") == []
+    assert jl(store, cid, "facts.jsonl") == []
+    assert jl(store, cid, "user_turns.jsonl") == []
     got = store.get(cid)
-    assert [v.content for v in got.verbatim] == ["make go"]
-    assert got.open_questions == ["Which holidays?"]
-    assert got.workspace["files"][0]["path"] == "/data/a"
-    assert [t["text"] for t in plan_of(store, cid)["tasks"]] == ["only this"]  # plan is fresh
+    assert got.verbatim == [] and got.open_questions == []
+    assert not any(got.workspace.get(c) for c in got.workspace)
+    assert [t["text"] for t in plan_of(store, cid)["tasks"]] == ["only this"]
 
 
-def test_old_only_resumed_save_supplied_sections_replace_wholesale(store):
+def test_old_only_resumed_save_uses_only_its_own_sections(store):
     p = parent(store)
     r = store.save({**BASE, "checkpoint_name": "old", "resumed_from": p.checkpoint_id,
                     "next_steps": ["x"],
-                    "decisions": [{"decision": "Use Prophet", "reason": "still seasonality"},
-                                  {"decision": "Weekly", "reason": "noise"}],
-                    "workspace": {"files": [{"path": "/data/z", "status": "still_relevant"}]},
-                    "open_questions": ["new q"], "verbatim": [{"label": "n", "content": "nn"}]})
+                    "decisions": [{"decision": "Weekly", "reason": "noise"}],
+                    "open_questions": ["new q"]})
     cid = r.checkpoint_id
-    assert [(d["id"], d["decision"]) for d in jl(store, cid, "decisions.jsonl")] == [
-        ("d-1", "Use Prophet"), ("d-2", "Weekly")]  # no duplicate of the restated decision
+    assert [(d["id"], d["decision"]) for d in jl(store, cid, "decisions.jsonl")] == [("d-1", "Weekly")]
+    assert store.get(cid).open_questions == ["new q"]
+    assert jl(store, cid, "facts.jsonl") == []
+
+
+def test_adding_user_turns_switches_carrying_on(store):
+    p = parent(store)
+    r = store.save({**BASE, "checkpoint_name": "new", "resumed_from": p.checkpoint_id,
+                    "next_steps": ["only this"], "user_turns": ["Another remark."]})
+    cid = r.checkpoint_id
+    assert [d["decision"] for d in jl(store, cid, "decisions.jsonl")] == ["Use Prophet"]
+    assert [f["key"] for f in jl(store, cid, "facts.jsonl")] == ["freq"]
+    assert len(jl(store, cid, "user_turns.jsonl")) == 2
     got = store.get(cid)
-    assert [i["path"] for i in got.workspace["files"]] == ["/data/z"]
-    assert got.open_questions == ["new q"] and [v.content for v in got.verbatim] == ["nn"]
-    assert [f["key"] for f in jl(store, cid, "facts.jsonl")] == ["freq"]  # omitted: carried
+    assert [v.content for v in got.verbatim] == ["make go"]
+    assert got.open_questions == ["Which holidays?"]
 
 
 def test_plan_updates_depends_on_text_says_real_ids():
