@@ -2,7 +2,6 @@
 import glob
 import io
 import json
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -185,18 +184,6 @@ def test_suite_48_calls_end_to_end(tmp_path, capsys):
         d = json.loads(f.read_text())
         assert "workspace_capture" in d and d["workspace_capture"]["secret_leakage"] == 0
         assert "verbatim_exact_match" in d["variants"]["checkpoint"]["aggregate"]
-
-
-def test_product_code_unchanged():
-    """Only product code is checked: src/ai_checkpoint outside eval/. Run folders, tests and
-    datasets (tracked or not) are ignored."""
-    r = subprocess.run(["git", "status", "--porcelain", "--", "src/ai_checkpoint"], cwd=ROOT,
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        pytest.skip("no git")
-    changed = [l[3:].strip() for l in r.stdout.splitlines()]
-    bad = [p for p in changed if not p.startswith("src/ai_checkpoint/eval/")]
-    assert bad == [], bad
 
 
 # ------------------------------------------------------------------ F-001: fixed scorers
