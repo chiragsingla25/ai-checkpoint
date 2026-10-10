@@ -294,6 +294,8 @@ class GitStore:
         resumed_raw = raw.get("resumed_from")
         # Redact first so secrets can never reach disk, the commit message or validation errors.
         clean = {k: (v if k == "resumed_from" else redact_obj(v)) for k, v in raw.items()}
+        if clean.get("plan_updates") == []:  # an empty list counts as not given (DESIGN-v2 s.11)
+            del clean["plan_updates"]
         plan_updates = clean.get("plan_updates")
         if plan_updates is not None:
             if clean.get("tasks") is not None:
@@ -316,8 +318,8 @@ class GitStore:
             parent_v2 = parent.v2 if parent.v2 is not None else _structured.from_flat(parent)
         # Only a resumed save that uses the structured fields (tasks, plan_updates, user_turns,
         # facts) carries the sections it does not supply forward and merges the ones it does
-        # (DESIGN-v2 s.11). An old-fields-only resumed save behaves as before: nothing carried.
-        merge = any(clean.get(k) is not None for k in ("tasks", "plan_updates", "user_turns", "facts"))
+        # (DESIGN-v2 s.11); an empty list counts as not given. An old-fields-only resumed save behaves as before: nothing carried.
+        merge = any(bool(clean.get(k)) for k in ("tasks", "plan_updates", "user_turns", "facts"))
         carry = parent_v2 is not None and merge
         base = _structured.max_task_number(parent_v2.tasks) if parent_v2 is not None else 0
         cp.v2 = _structured.build(clean, cp, base, parent_v2 if carry else None)

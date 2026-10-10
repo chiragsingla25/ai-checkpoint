@@ -60,7 +60,7 @@
       "The brief of a bundle checkpoint shows each task's id (e.g. `[t-2]`)",
       "save with resumed_from=cp-001 and plan_updates [{id: t-2, status: done}, {text: 'new task', from: ai}] produces a plan.json that keeps all parent tasks (ids, quotes, order) with t-2 done and a new task with the next unused id",
       "An update naming an unknown task id returns a validation error naming the id; nothing is written",
-      "Unmentioned parent decisions, facts, workspace and user_turns are carried forward unless replaced, for any save with resumed_from that gives structured fields (tasks, plan_updates, user_turns or facts); an old-fields-only resumed save behaves as before (nothing carried). The events.jsonl line records resumed_from",
+      "Unmentioned parent decisions, facts, workspace and user_turns are carried forward unless replaced, for any save with resumed_from that gives structured fields (non-empty tasks, plan_updates, user_turns or facts; an empty list counts as not given); an old-fields-only resumed save behaves as before (nothing carried). The events.jsonl line records resumed_from",
       "plan_updates without resumed_from returns a clear error; resumed_from pointing at an old flat checkpoint converts its next_steps into tasks first, then applies updates",
       "The computed next action and the save echo reflect the updated plan",
       "The plan_updates depends_on field has its own description saying ids are the real task ids shown in the brief (e.g. \"t-2\"), not list positions; a new task in plan_updates gets the next id after the highest in the brief"

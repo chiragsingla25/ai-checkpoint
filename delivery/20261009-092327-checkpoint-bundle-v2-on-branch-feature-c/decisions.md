@@ -37,3 +37,8 @@ Plan approved as written: 6 features on branch feature/checkpoint-bundle-v2; pus
 
 ## Correction (orchestrator, 2026-10-10)
 - The statement above that "attempt 1 already implements (a)" was wrong. QA re-check (qa/F-005-attempt-2.md) found that the code committed as 9107b1e carries forward for every resumed save (`carry = parent_v2 is not None`). That is the withdrawn orchestrator ruling. The working tree had been changed after attempt-1 QA without a build-log entry, and the orchestrator committed it without re-verifying. F-005 goes back to the builder (attempt 3) to implement Chirag's ruling (a).
+
+## F-005 empty structured lists (QA observation, attempt 3) — ruling by Chirag (2026-10-10)
+- Observation by QA: `user_turns: []` or `facts: []` on a resumed save turns carry-forward on via store.save/CLI (checked with `is not None`), but not over MCP (empty lists dropped first).
+- Ruling: an empty list counts as not given; it does not turn carry-forward on. Same behaviour on every path.
+- Effect: criterion 4 reworded ("non-empty ... an empty list counts as not given"); F-005 back to the builder (attempt 4), then a QA re-check. QA attempt 3 was PASS, so this is not a failed round.

@@ -112,7 +112,7 @@ def test_carry_forward_of_other_sections_and_events(store):
     assert last["resumed_from"] == p.checkpoint_id
     # supplying open_questions / verbatim replaces
     r2 = store.save({**BASE, "checkpoint_name": "c3", "resumed_from": cid,
-                     "plan_updates": [], "open_questions": [], "verbatim": [
+                     "plan_updates": [{"text": "z"}], "open_questions": [], "verbatim": [
                          {"label": "z", "content": "zz"}]})
     g2 = store.get(r2.checkpoint_id)
     assert g2.open_questions == [] and [v.content for v in g2.verbatim] == ["zz"]
@@ -264,3 +264,43 @@ def test_plan_updates_depends_on_text_says_real_ids():
     assert "next id after the highest" in dep["description"]
     tdep = (getattr(tool, "inputSchema", None) or tool.input_schema)["$defs"]["TaskIn"]["properties"]["depends_on"]
     assert "Task k in your list is t-k" in tdep["description"]  # tasks keeps the positional text
+
+
+@pytest.mark.parametrize("field", ["user_turns", "facts", "plan_updates"])
+def test_empty_structured_list_does_not_turn_carrying_on(store, field):
+    # criterion 4 (empty list counts as not given), store/CLI path
+    p = parent(store)
+    r = store.save({**BASE, "checkpoint_name": "e", "resumed_from": p.checkpoint_id,
+                    "next_steps": ["only this"], field: []})
+    cid = r.checkpoint_id
+    assert jl(store, cid, "decisions.jsonl") == []
+    assert jl(store, cid, "facts.jsonl") == []
+    assert jl(store, cid, "user_turns.jsonl") == []
+    got = store.get(cid)
+    assert got.verbatim == [] and got.open_questions == []
+    assert [t["text"] for t in plan_of(store, cid)["tasks"]] == ["only this"]
+
+
+def test_empty_tasks_still_reaches_no_unfinished_task_check(store):
+    # F-004 kept: explicit tasks: [] is not carry-forward, and still errors
+    p = parent(store)
+    with pytest.raises(CheckError, match="no unfinished task"):
+        store.save({**BASE, "checkpoint_name": "e", "resumed_from": p.checkpoint_id, "tasks": []})
+
+
+def test_mcp_empty_structured_lists_do_not_carry(store):
+    # criterion 4 (empty list counts as not given), MCP path, same result as the store path
+    pytest.importorskip("mcp")
+    from ai_checkpoint.server import create_server
+    from test_server import _text
+    p = parent(store)
+    srv = create_server(store)
+    asyncio.run(srv.call_tool("save_checkpoint", {
+        "chat_name": "carry", "checkpoint_name": "m", "objective": "o", "current_step": "s",
+        "resumed_from": p.checkpoint_id, "next_steps": ["only this"],
+        "user_turns": [], "facts": [], "plan_updates": []}))
+    cid = store.get("m").checkpoint_id
+    assert jl(store, cid, "decisions.jsonl") == [] and jl(store, cid, "facts.jsonl") == []
+    assert jl(store, cid, "user_turns.jsonl") == []
+    assert store.get(cid).open_questions == []
+    assert [t["text"] for t in plan_of(store, cid)["tasks"]] == ["only this"]
