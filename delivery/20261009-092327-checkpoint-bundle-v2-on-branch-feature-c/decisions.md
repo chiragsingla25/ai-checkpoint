@@ -28,3 +28,9 @@ Plan approved as written: 6 features on branch feature/checkpoint-bundle-v2; pus
 - Reason: owner's call; keeps old-style saves unchanged and steers resumed chats to the new style.
 - Effect: criterion 4 reworded to QA's proposed wording (a) in features.json. The builder's attempt 1 already implements (a), so no code change is needed for this criterion. The orchestrator's "carry for every resumed save" ruling and its old-fields replace-wholesale clarification are withdrawn.
 - Still open from the orchestrator's entry: its extra request that the plan_updates depends_on text say ids are the real task ids shown in the brief. That is not a written criterion; QA should treat it as a Note unless Chirag adopts it.
+
+## F-005 plan_updates depends_on description (QA note, attempt 1) — ruling by Chirag (2026-10-10)
+- Objection/note by QA: `plan_updates[].depends_on` reuses the `tasks` text ("Task k in your list is t-k"), but plan_updates ids are real lineage ids, so a model following the text can get a silently wrong dependency.
+- Ruling: fix it. New criterion 7 added to F-005: plan_updates depends_on has its own description (real ids from the brief, not positions).
+- Reason: same class of silent-wrong-dependency problem as F-003 attempt 1.
+- Effect: F-005 goes back to the builder (attempt 2), then a QA re-check.

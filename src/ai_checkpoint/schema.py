@@ -83,8 +83,9 @@ FIELD_DESCRIPTIONS = {
         "Tasks you do not mention stay as they were."
     ),
     "plan_updates.depends_on": (
-        "Optional. Ids of tasks that must be done first: the real task ids shown in the brief "
-        "(e.g. [\"t-3\"]) or the ids of new tasks in this list, NOT list positions."
+        "Optional. Ids of tasks that must be done first. These are the real task ids shown in the "
+        "brief (e.g. [\"t-2\"]), NOT list positions. A new task in plan_updates gets the next id "
+        "after the highest one in the brief, so a dependency on another new task uses that id."
     ),
     "plan_updates.id": "Id of an existing task from the brief, e.g. \"t-2\". Leave out for a new task.",
     "plan_updates.text": "New tasks only: what to do. Existing tasks cannot be reworded.",

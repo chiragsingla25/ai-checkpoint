@@ -243,10 +243,16 @@ def test_old_only_resumed_save_supplied_sections_replace_wholesale(store):
 def test_plan_updates_depends_on_text_says_real_ids():
     from ai_checkpoint.schema import FIELD_DESCRIPTIONS as FD
     text = FD["plan_updates.depends_on"]
-    assert "real task ids" in text and "NOT list positions" in text and "t-3" in text
+    assert "real task ids" in text and "NOT list positions" in text and "t-2" in text
     pytest.importorskip("mcp")
     import asyncio as aio
     from ai_checkpoint.server import create_server
     tool = [t for t in aio.run(create_server().list_tools()) if t.name == "save_checkpoint"][0]
     dep = (getattr(tool, "inputSchema", None) or tool.input_schema)["$defs"]["PlanUpdateIn"]["properties"]["depends_on"]
     assert dep["description"] == text
+    # F-005 criterion 7: its own text, not the positional `tasks.depends_on` sentence
+    assert "Task k in your list is t-k" not in dep["description"]
+    assert dep["description"] != FD["tasks.depends_on"]
+    assert "next id after the highest" in dep["description"]
+    tdep = (getattr(tool, "inputSchema", None) or tool.input_schema)["$defs"]["TaskIn"]["properties"]["depends_on"]
+    assert "Task k in your list is t-k" in tdep["description"]  # tasks keeps the positional text
