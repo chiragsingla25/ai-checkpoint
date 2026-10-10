@@ -165,3 +165,26 @@ def test_eval_runs_readme_documents_v2_run():
     t = (ROOT / "eval-runs" / "README.md").read_text()
     assert "handover-v2" in t and "--handover-format" in t and "90%" in t and "88%" in t
     assert "manual" in t.lower()
+
+
+# F-006 attempt 2 (QA regression): secret_leakage is measured BEFORE save-time redaction in both modes
+class LeakyModel(FakeModel):
+    def complete(self, system, messages):
+        out = super().complete(system, messages)
+        if system.startswith("TASK: COMPACT"):
+            d = json.loads(out)
+            d["context"] = (d.get("context") or "") + " The API key is " + SECRET
+            return json.dumps(d)
+        return out
+
+
+SECRET = "sk-fake-0123456789abcdef0123456789abcdef"
+
+
+def test_secret_leakage_same_in_bundle_and_old_modes():
+    sc = load_scenario(str(Path(__file__).resolve().parent.parent / "datasets" / "handover-v2" / "coding-20.json"))
+    sc.secret_values = list(sc.secret_values) + [SECRET]
+    got = {m: run_scenario(sc, LeakyModel(), handover_format=m)["workspace_capture"]["secret_leakage"]
+           for m in ("bundle", "old")}
+    assert got["old"] >= 1
+    assert got["bundle"] == got["old"]

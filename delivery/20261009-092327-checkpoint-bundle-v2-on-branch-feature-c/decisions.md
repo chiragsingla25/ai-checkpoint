@@ -42,3 +42,7 @@ Plan approved as written: 6 features on branch feature/checkpoint-bundle-v2; pus
 - Observation by QA: `user_turns: []` or `facts: []` on a resumed save turns carry-forward on via store.save/CLI (checked with `is not None`), but not over MCP (empty lists dropped first).
 - Ruling: an empty list counts as not given; it does not turn carry-forward on. Same behaviour on every path.
 - Effect: criterion 4 reworded ("non-empty ... an empty list counts as not given"); F-005 back to the builder (attempt 4), then a QA re-check. QA attempt 3 was PASS, so this is not a failed round.
+
+## F-005 `plan_updates: []` alone (builder note, attempt 4) — ruling by Chirag (2026-10-10)
+- Consequence of the empty-list ruling: a resumed save with only `plan_updates: []` (no tasks/next_steps) now fails with "next_steps: is required" instead of keeping the parent plan and carrying.
+- Ruling: keep the error. An empty list is not given; to keep the plan, give at least one update.

@@ -99,3 +99,11 @@
 - Tests: `.venv/bin/python -m pytest -q`: 401 passed, 1 failed. The failure is `tests/test_metrics.py::test_product_code_unchanged`, which fails only because src/ai_checkpoint/store.py is modified and uncommitted (it checks `git status` of product code outside eval/); it passes once the orchestrator commits. test_setup_script::test_full_flow passed. tests/test_carry.py: 21 passed.
 - User-visible changes: a resumed save with only `plan_updates: []` (no next_steps/tasks) now fails with "next_steps: is required" instead of keeping the parent plan; `plan_updates: []` without resumed_from no longer errors.
 - Notes: none deferred.
+
+## F-006 attempt 2
+- What changed: `src/ai_checkpoint/eval/pipeline.py` - `_bundle_handover` now also returns the parsed compaction dict that was passed to `store.save()`; `_checkpoint_handover` carries it as `presave`; `_workspace_capture` measures `secret_leakage` on that dict (its JSON and its workspace) instead of the redacted `store.get()` output. Other capture scores are unchanged. `tests/test_eval_bundle.py` - new test.
+- Which output is measured: the attempt that was actually saved (the retry output if a retry happened, otherwise the first). If the save fails after the retry there is no checkpoint, so leakage is None as before.
+- How to run it: `.venv/bin/python -m pytest -q`
+- Tests: full suite 403 passed. `test_secret_leakage_same_in_bundle_and_old_modes` (leaking fake model on coding-20) asserts old >= 1 and bundle == old (QA regression, results.md label "before save-time redaction").
+- User-visible changes: on the default bundle path, `secret_leakage` in results now counts secrets the model emitted (as at BASE and with `--handover-format old`) rather than always 0.
+- Notes: nothing else changed.

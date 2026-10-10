@@ -235,7 +235,8 @@ def _bundle_handover(scenario: Scenario, model: Model, caller: Optional[Caller] 
         attempt = 1
         while True:
             try:
-                res = store.save(_parse_compaction(raw))
+                parsed = _parse_compaction(raw)
+                res = store.save(parsed)
                 break
             except ValidationError as e:
                 errs = _problems(e)
@@ -254,7 +255,7 @@ def _bundle_handover(scenario: Scenario, model: Model, caller: Optional[Caller] 
                 raw = _call(caller, model, "compact", system, messages, "retry")
                 attempt = 2
         cp = store.get(res.checkpoint_id)  # what resume_checkpoint reads
-        return render_brief(cp), cp, info
+        return render_brief(cp), cp, info, parsed  # parsed = the accepted attempt, before save-time redaction
 
 
 def _call(caller: Optional[Caller], model: Model, stage: str, system: str, messages: List[dict], detail: str = "") -> str:
@@ -272,8 +273,8 @@ def _checkpoint_handover(scenario: Scenario, model: Model, caller: Optional[Call
         except ValidationError as e:  # recorded, not fatal; model/API failures (ModelError) still abort
             return {"handover": None, "error": str(e), "save_checks": {"mode": "old"}}
     try:
-        brief, cp, info = _bundle_handover(scenario, model, caller)
-        return {"handover": brief, "error": None, "checkpoint": cp, "save_checks": info}
+        brief, cp, info, presave = _bundle_handover(scenario, model, caller)
+        return {"handover": brief, "error": None, "checkpoint": cp, "save_checks": info, "presave": presave}
     except ValidationError as e:  # save checks still failing after the retry: recorded, not fatal
         info = getattr(e, "save_info", {"mode": "bundle", "rejected_first": False, "retry_needed": False,
                                         "first_errors": [], "retry_errors": []})
@@ -491,6 +492,15 @@ def _workspace_capture(scenario: Scenario, ck: Dict[str, Any]) -> Dict[str, Any]
     if cp is None:
         return {"status": "failed", "error": ck.get("error"), "capture_recall": None, "capture_precision": None,
                 "status_accuracy": None, "secret_leakage": None}
-    scores = capture_scores(scenario.environment or {}, cp.workspace, scenario.secret_values,
-                            [json.dumps(cp.to_dict(), ensure_ascii=False), ck["handover"] or ""])
+    presave = ck.get("presave")
+    if presave is not None:
+        # bundle path: measure the model's own parsed output (the attempt that was saved), BEFORE
+        # store.save() redacted it, so secret_leakage means the same as on the old path
+        ws, blob = presave.get("workspace") if isinstance(presave, dict) else None, json.dumps(presave, ensure_ascii=False)
+    else:
+        ws, blob = cp.workspace, json.dumps(cp.to_dict(), ensure_ascii=False)
+    scores = capture_scores(scenario.environment or {}, cp.workspace, scenario.secret_values, [blob, ck["handover"] or ""])
+    if presave is not None:
+        scores = {**scores, "secret_leakage": capture_scores(
+            scenario.environment or {}, ws, scenario.secret_values, [blob])["secret_leakage"]}
     return {"status": "ok", "error": None, **scores}
