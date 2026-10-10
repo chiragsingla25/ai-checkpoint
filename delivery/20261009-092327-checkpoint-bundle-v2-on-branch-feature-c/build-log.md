@@ -107,3 +107,11 @@
 - Tests: full suite 403 passed. `test_secret_leakage_same_in_bundle_and_old_modes` (leaking fake model on coding-20) asserts old >= 1 and bundle == old (QA regression, results.md label "before save-time redaction").
 - User-visible changes: on the default bundle path, `secret_leakage` in results now counts secrets the model emitted (as at BASE and with `--handover-format old`) rather than always 0.
 - Notes: nothing else changed.
+
+## F-006 attempt 3
+- What changed: `src/ai_checkpoint/eval/pipeline.py`: in bundle mode `_workspace_capture` now scores secret_leakage on the validated, unredacted checkpoint of the attempt that was saved (new helpers `_validated_unredacted`, `_validated_dict`: `Checkpoint.from_dict` + `structured.build`, the two validation steps store.save runs after redaction; flat fields plus v2 data incl. user_turns), instead of the model's raw JSON. `tests/test_eval_bundle.py`: new tests (below).
+- Hook: store.save() redacts before it validates and has no hook between, so I did not touch product code. The eval re-runs the same two validation calls without redaction, for scoring only (nothing written, no patching of store globals, so it is thread-safe). Valid because the eval never does a resumed save.
+- How to run it: `.venv/bin/python -m pytest -q tests/test_eval_bundle.py`
+- Tests: full suite `.venv/bin/python -m pytest -q`: 409 passed. Criterion-by-QA-item: `test_secret_never_stored_is_not_leakage_in_either_mode[env_var_value|unknown_key]` bundle == old == 0; `test_secret_in_kept_field_counts_in_both_modes[context|decisions|verbatim]` bundle == old == 1; `test_secret_in_user_turns_counts_in_bundle_mode` bundle == 1 (the old format has no user_turns, so this difference between modes is by design); `test_secret_leakage_same_in_bundle_and_old_modes` kept. Run against 31c7ac4 (worktree, src first on path): the two never_stored tests fail (bundle 1, old 0); the others pass there (regression guards).
+- User-visible changes: None beyond eval secret_leakage no longer counting secrets the product never stores in bundle mode.
+- Notes: if store.save validation changes, the helper must follow it.

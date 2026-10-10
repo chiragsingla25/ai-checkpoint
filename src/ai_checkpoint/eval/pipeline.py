@@ -15,6 +15,7 @@ from ..brief import estimate_tokens, render_brief
 from ..errors import ValidationError
 from ..model import Checkpoint
 from ..schema import compaction_system_prompt
+from .. import structured as _structured
 from ..store import GitStore
 from .models import (DEFAULT_TIMEOUT, TASK_ANSWER, TASK_JUDGE, TASK_SUMMARIZE, CallTimeout, Model,
                      ModelError, call_with_timeout)
@@ -258,6 +259,19 @@ def _bundle_handover(scenario: Scenario, model: Model, caller: Optional[Caller] 
         return render_brief(cp), cp, info, parsed  # parsed = the accepted attempt, before save-time redaction
 
 
+def _validated_unredacted(parsed: Dict[str, Any]) -> Checkpoint:
+    """The checkpoint store.save() builds from ``parsed`` (non-resumed save) with redaction not applied:
+    Checkpoint.from_dict + structured.build, the same two validation steps save() runs after redacting.
+    Only for scoring; nothing is written."""
+    cp = Checkpoint.from_dict(dict(parsed))
+    cp.v2 = _structured.build(dict(parsed), cp, 0, None)
+    return cp
+
+
+def _validated_dict(cp: Checkpoint) -> Dict[str, Any]:
+    return {**cp.to_dict(), **_structured.to_dict(cp)}
+
+
 def _call(caller: Optional[Caller], model: Model, stage: str, system: str, messages: List[dict], detail: str = "") -> str:
     if caller is None:
         return model.complete(system, messages)
@@ -494,13 +508,15 @@ def _workspace_capture(scenario: Scenario, ck: Dict[str, Any]) -> Dict[str, Any]
                 "status_accuracy": None, "secret_leakage": None}
     presave = ck.get("presave")
     if presave is not None:
-        # bundle path: measure the model's own parsed output (the attempt that was saved), BEFORE
-        # store.save() redacted it, so secret_leakage means the same as on the old path
-        ws, blob = presave.get("workspace") if isinstance(presave, dict) else None, json.dumps(presave, ensure_ascii=False)
-    else:
-        ws, blob = cp.workspace, json.dumps(cp.to_dict(), ensure_ascii=False)
-    scores = capture_scores(scenario.environment or {}, cp.workspace, scenario.secret_values, [blob, ck["handover"] or ""])
-    if presave is not None:
+        # bundle path: measure what validation keeps of the saved attempt (flat fields + v2 data such as
+        # user_turns), BEFORE store.save() redacts it -- the old path's meaning of secret_leakage
+        v = _validated_unredacted(presave)
+        ws, blob = v.workspace, json.dumps(_validated_dict(v), ensure_ascii=False)
+        scores = capture_scores(scenario.environment or {}, cp.workspace, scenario.secret_values,
+                                [blob, ck["handover"] or ""])
         scores = {**scores, "secret_leakage": capture_scores(
             scenario.environment or {}, ws, scenario.secret_values, [blob])["secret_leakage"]}
+    else:
+        scores = capture_scores(scenario.environment or {}, cp.workspace, scenario.secret_values,
+                                [json.dumps(cp.to_dict(), ensure_ascii=False), ck["handover"] or ""])
     return {"status": "ok", "error": None, **scores}

@@ -188,3 +188,62 @@ def test_secret_leakage_same_in_bundle_and_old_modes():
            for m in ("bundle", "old")}
     assert got["old"] >= 1
     assert got["bundle"] == got["old"]
+
+
+# F-006 attempt 3 (QA regression): bundle secret_leakage scores what validation keeps (before redaction),
+# not the model's raw JSON. Same number as the old path on every field both paths keep.
+def _leaky(mutate):
+    class M(FakeModel):
+        def complete(self, system, messages):
+            out = super().complete(system, messages)
+            if system.startswith("TASK: COMPACT"):
+                d = json.loads(out)
+                mutate(d)
+                return json.dumps(d)
+            return out
+    return M()
+
+
+def _env_name(d):  # env var NAME carries the value; validation keeps names only
+    d.setdefault("workspace", {}).setdefault("env_vars", []).append(
+        {"name": "API_KEY=" + SECRET, "status": "still_relevant"})
+
+
+def _unknown_key(d):  # unknown top-level key; validation drops it
+    d["notes_extra"] = "the key is " + SECRET
+
+
+def _in_context(d):
+    d["context"] = (d.get("context") or "") + " key " + SECRET
+
+
+def _in_decisions(d):
+    d["decisions"] = list(d.get("decisions") or []) + [{"decision": "use " + SECRET, "reason": "because"}]
+
+
+def _in_verbatim(d):
+    d["verbatim"] = list(d.get("verbatim") or []) + [{"label": "snippet", "content": "KEY=" + SECRET}]
+
+
+def _leak(mutate, fmt):
+    sc = load_scenario(str(Path(__file__).resolve().parent.parent / "datasets" / "handover-v2" / "coding-20.json"))
+    sc.secret_values = list(sc.secret_values) + [SECRET]
+    return run_scenario(sc, _leaky(mutate), handover_format=fmt)["workspace_capture"]["secret_leakage"]
+
+
+@pytest.mark.parametrize("mutate", [_env_name, _unknown_key], ids=["env_var_value", "unknown_key"])
+def test_secret_never_stored_is_not_leakage_in_either_mode(mutate):
+    # F-006 attempt 3: secrets validation throws away score 0, bundle == old
+    assert _leak(mutate, "bundle") == _leak(mutate, "old") == 0
+
+
+@pytest.mark.parametrize("mutate", [_in_context, _in_decisions, _in_verbatim],
+                         ids=["context", "decisions", "verbatim"])
+def test_secret_in_kept_field_counts_in_both_modes(mutate):
+    # F-006 attempt 3: fields both paths keep give bundle == old == 1
+    assert _leak(mutate, "bundle") == _leak(mutate, "old") == 1
+
+
+def test_secret_in_user_turns_counts_in_bundle_mode():
+    # F-006 attempt 3: the bundle stores user_turns, so a secret there counts (the old format has no such field)
+    assert _leak(lambda d: d["user_turns"].append("my key is " + SECRET), "bundle") == 1
