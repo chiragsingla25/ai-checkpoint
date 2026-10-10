@@ -9,6 +9,15 @@ Add a row and a folder for every new run. Numbers are averages over the run's sc
 2. Copy: `mkdir -p eval-runs/<YYYY-MM-DD>-<dataset>-<model> && cp -r results/<run-name>/* eval-runs/<YYYY-MM-DD>-<dataset>-<model>/`
 3. Add a row below with the eval-kit commit (`git log -1 --format=%h`) and a one-line note.
 
+## Running the bundle (v2) checkpoint for real
+The checkpoint variant is built through the bundle path by default: the model's compaction JSON goes through `store.save()` into a temporary store (the same save-time checks as the MCP tool), then the brief is read back like `resume_checkpoint` does. If the checks reject the save, the model gets ONE retry with the error messages; `results.json` records it under `variants.checkpoint.save_checks` (`mode`, `rejected_first`, `retry_needed`, `first_errors`, `retry_errors`), and `results.md` has a one-line note. If the retry is also rejected the checkpoint variant is recorded as failed (not aborted).
+
+1. Offline smoke test (no key, no network): `.venv/bin/checkpoint-eval suite datasets/handover-v2/*.json --model fake --out results/v2-fake/`
+2. Real run: `.venv/bin/checkpoint-eval suite datasets/handover-v2/*.json --model anthropic --model-name <id> --workers 8 --timeout 90 --out results/v2-bundle-<model>/` (needs the API key), then copy it to `eval-runs/` as above.
+3. To reproduce earlier runs with the flat validation path (no store, no save checks), add `--handover-format old`.
+
+Release target (a separate MANUAL run, not an offline test): next-step accuracy >= 90% (baseline 50%) with key-fact recall >= 88% (baseline 88%) on handover-v2. Push the branch only if a real run reaches it.
+
 ## Runs
 
 | Run folder | Date | Model | Dataset | Eval kit commit | Product commit | Notes |

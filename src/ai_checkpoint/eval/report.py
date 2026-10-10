@@ -33,6 +33,11 @@ def markdown_table(results: Dict[str, Any]) -> str:
             f"{_pct(a.get('verbatim_exact_match'))} | {_pct(a.get('stale_fact_use'))} | "
             f"{_pct(a.get('next_step_accuracy'))} | {_num(a['brief_tokens'])} |"
         )
+    sc = (results["variants"]["checkpoint"]).get("save_checks")
+    if sc and sc.get("mode") == "bundle":
+        lines += ["", "Save checks (checkpoint variant): " + (
+            "rejected on the first try, retry needed" if sc.get("retry_needed") else "passed on the first try")
+            + (f"; {len(sc['retry_errors'])} problem(s) remained after the retry" if sc.get("retry_errors") else "")]
     wc = results.get("workspace_capture")
     if wc:
         leak = wc.get("secret_leakage")

@@ -176,8 +176,10 @@ def test_results_structure_compatible(tmp_path, capsys):
     assert cli(["run", str(f), "--out", str(tmp_path / "o")], capsys)[0] == 0
     res = json.loads((tmp_path / "o" / "results.json").read_text())
     assert set(res) == {"scenario", "description", "model", "messages", "probe_count", "variants"}
-    for v in res["variants"].values():
-        assert set(v) == {"status", "error", "handover_chars", "probes", "aggregate"}
+    for name, v in res["variants"].items():
+        # F-006: the checkpoint variant also records the save-check outcome (save_checks)
+        extra = {"save_checks"} if name == "checkpoint" else set()
+        assert set(v) == {"status", "error", "handover_chars", "probes", "aggregate"} | extra
         assert len(v["probes"]) == 3
         assert set(v["probes"][0]) >= {"question", "answer", "key_fact_recall", "contradictions", "facts"}
 

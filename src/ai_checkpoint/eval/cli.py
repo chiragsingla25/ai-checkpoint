@@ -51,6 +51,10 @@ def _common(r: argparse.ArgumentParser) -> None:
                    help="maximum model calls in flight at once, across all scenarios (default 8; 1 = fully sequential)")
     r.add_argument("--force", action="store_true",
                    help="replace an existing results.json in the output folder (default: refuse)")
+    r.add_argument("--handover-format", choices=("bundle", "old"), default="bundle", dest="handover_format",
+                   help="how the checkpoint variant is built: bundle (default: store save with the save-time "
+                   "checks, one retry on rejection, then resume) or old (validate with the flat model and render "
+                   "without the store, as in earlier runs)")
     r.add_argument("--strict-next-step", action="store_true", dest="strict_next_step",
                    help="score next-step answers by literal required terms (default: a filename term "
                    "also matches its stem or number, e.g. 'migration 0023')")
@@ -106,9 +110,9 @@ def _exists_error(folder: Path) -> str:
 
 
 def _run_one(scenario, model, folder: Path, timeout: float, workers: int = 1, limiter=None,
-             strict_next_step: bool = False) -> str:
+             strict_next_step: bool = False, handover_format: str = "bundle") -> str:
     results = run_scenario(scenario, model, timeout=timeout, progress=sys.stderr, workers=workers, limiter=limiter,
-                           strict_next_step=strict_next_step)
+                           strict_next_step=strict_next_step, handover_format=handover_format)
     write_outputs(results, folder)
     return markdown_table(results)
 
@@ -121,7 +125,8 @@ def _run(args) -> int:
             print(_exists_error(out), file=sys.stderr)
             return 1
         model = make_model(args.model, args.model_name, args.timeout)
-        table = _run_one(scenario, model, out, args.timeout, args.workers, strict_next_step=args.strict_next_step)
+        table = _run_one(scenario, model, out, args.timeout, args.workers, strict_next_step=args.strict_next_step,
+                         handover_format=args.handover_format)
     except (CheckpointError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -153,7 +158,7 @@ def _suite(args) -> int:
     with ThreadPoolExecutor(max_workers=len(scenarios) if args.workers > 1 else 1) as ex:
         # sequential (workers=1) runs each scenario inline in order; otherwise scenarios start together
         # and share the limiter; results are reported in command-line order either way
-        futs = [ex.submit(_run_one, sc, model, out / sc.name, args.timeout, args.workers, limiter, args.strict_next_step)
+        futs = [ex.submit(_run_one, sc, model, out / sc.name, args.timeout, args.workers, limiter, args.strict_next_step, args.handover_format)
                 for sc in scenarios]
         for i, (sc, fut) in enumerate(zip(scenarios, futs)):
             try:

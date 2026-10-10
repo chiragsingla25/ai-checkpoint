@@ -182,6 +182,12 @@ class FakeModel:
         recent_q = [s for u in users[-3:] for s in _sentences(u) if s.endswith("?")][:3]
         nexts = [s for s in all_sents[-12:] if re.search(r"\b(next|todo|then)\b", s, re.I)][:3]
         last_user = users[-1] if users else ""
+        # tasks (new form): the user's own last request first, quoted verbatim from the transcript
+        # (the quote must also be in user_turns, which the save checks require), then the AI's ideas.
+        quote = next((x for x in _sentences(last_user) if x in last_user and "```" not in x), "")[:300]
+        quote = quote or last_user.strip()[:300]
+        tasks = [{"text": f"Continue with: {_first(last_user)}", "status": "todo", "from": "user", "quote": quote}]
+        tasks += [{"text": n, "status": "todo", "from": "ai"} for n in nexts]
         data = {
             "chat_name": "eval-chat",
             "checkpoint_name": "eval-checkpoint",
@@ -190,7 +196,8 @@ class FakeModel:
             "decisions": decisions,
             "completed": completed,
             "current_step": _first(assts[-1] if assts else last_user),
-            "next_steps": [f"Continue with: {_first(last_user)}"] + nexts,
+            "tasks": tasks,
+            "user_turns": [u for u in users[-3:] if u.strip()],
             "open_questions": recent_q,
             "verbatim": verbatim,
             "last_exchange": {"user": last_user, "assistant": assts[-1] if assts else ""},

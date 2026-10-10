@@ -3,15 +3,19 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
+from datetime import datetime, timezone
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any, Dict, List, Optional, TextIO
 
 from ..brief import estimate_tokens, render_brief
 from ..errors import ValidationError
 from ..model import Checkpoint
 from ..schema import compaction_system_prompt
+from ..store import GitStore
 from .models import (DEFAULT_TIMEOUT, TASK_ANSWER, TASK_JUDGE, TASK_SUMMARIZE, CallTimeout, Model,
                      ModelError, call_with_timeout)
 from .metrics import capture_scores, mean_or_none, score_probe
@@ -188,20 +192,69 @@ def _list_with_count_retry(caller: "Caller", stage: str, system: str, user: str,
     return items, ""
 
 
-def _compaction_handover(scenario: Scenario, model: Model, caller: Optional[Caller] = None):
-    """Compaction call -> validate with the F-001 model -> render the F-002 brief."""
-    prompt = (
+def _compaction_prompt(scenario: Scenario) -> str:
+    return (
         "Save a checkpoint of the conversation below. The conversation follows, to the end of "
         "this message; every message is introduced by a line like `=== user ===`.\n\n"
         + render_transcript(scenario.messages)
     )
-    raw = _call(caller, model, "compact", compaction_system_prompt(), [{"role": "user", "content": prompt}])
+
+
+def _parse_compaction(raw: str):
     try:
-        data = extract_json(raw)
+        return extract_json(raw)
     except (ValueError, RecursionError) as e:
         raise ValidationError("compaction output", f"is not valid JSON ({e})") from None
-    cp = Checkpoint.from_dict(data)  # ValidationError names the field
+
+
+def _compaction_handover(scenario: Scenario, model: Model, caller: Optional[Caller] = None):
+    """OLD path: compaction call -> validate with the flat model -> render the flat brief (no store)."""
+    raw = _call(caller, model, "compact", compaction_system_prompt(),
+                [{"role": "user", "content": _compaction_prompt(scenario)}])
+    cp = Checkpoint.from_dict(_parse_compaction(raw))  # ValidationError names the field
     return render_brief(cp), cp
+
+
+def _problems(e: ValidationError) -> List[str]:
+    return list(getattr(e, "problems", None) or [str(e)])
+
+
+def _bundle_handover(scenario: Scenario, model: Model, caller: Optional[Caller] = None):
+    """BUNDLE path: compaction call -> store.save() into a temp store (the same checks as the MCP tool)
+    -> resume. If save is rejected, ONE retry with the error messages (decisions.md ruling 1).
+    Returns (brief, checkpoint, save_info); raises ValidationError (with .save_info) when the save is
+    still rejected after the retry."""
+    system = compaction_system_prompt()
+    messages = [{"role": "user", "content": _compaction_prompt(scenario)}]
+    info: Dict[str, Any] = {"mode": "bundle", "rejected_first": False, "retry_needed": False,
+                            "first_errors": [], "retry_errors": []}
+    raw = _call(caller, model, "compact", system, messages)
+    with tempfile.TemporaryDirectory(prefix="aic-eval-") as tmp:
+        # fixed clock: the saved checkpoint (checkpoint.json) must not differ between runs
+        store = GitStore(Path(tmp), clock=lambda: datetime(2026, 1, 1, tzinfo=timezone.utc))
+        attempt = 1
+        while True:
+            try:
+                res = store.save(_parse_compaction(raw))
+                break
+            except ValidationError as e:
+                errs = _problems(e)
+                if attempt == 2:
+                    info["retry_errors"] = errs
+                    e.save_info = info  # type: ignore[attr-defined]
+                    raise
+                info["rejected_first"] = info["retry_needed"] = True
+                info["first_errors"] = errs
+                messages = messages + [
+                    {"role": "assistant", "content": raw},
+                    {"role": "user", "content": f"Your save was rejected. Nothing was saved.\n{e}\n"
+                     "Reply again with ONE complete corrected JSON object (no prose)."}]
+                if caller is not None:
+                    caller.expect_extra_call()
+                raw = _call(caller, model, "compact", system, messages, "retry")
+                attempt = 2
+        cp = store.get(res.checkpoint_id)  # what resume_checkpoint reads
+        return render_brief(cp), cp, info
 
 
 def _call(caller: Optional[Caller], model: Model, stage: str, system: str, messages: List[dict], detail: str = "") -> str:
@@ -210,12 +263,21 @@ def _call(caller: Optional[Caller], model: Model, stage: str, system: str, messa
     return caller.call(stage, system, messages, detail)
 
 
-def _checkpoint_handover(scenario: Scenario, model: Model, caller: Optional[Caller]) -> Dict[str, Any]:
+def _checkpoint_handover(scenario: Scenario, model: Model, caller: Optional[Caller],
+                         handover_format: str = "bundle") -> Dict[str, Any]:
+    if handover_format == "old":
+        try:
+            brief, cp = _compaction_handover(scenario, model, caller)
+            return {"handover": brief, "error": None, "checkpoint": cp, "save_checks": {"mode": "old"}}
+        except ValidationError as e:  # recorded, not fatal; model/API failures (ModelError) still abort
+            return {"handover": None, "error": str(e), "save_checks": {"mode": "old"}}
     try:
-        brief, cp = _compaction_handover(scenario, model, caller)
-        return {"handover": brief, "error": None, "checkpoint": cp}
-    except ValidationError as e:  # recorded, not fatal; model/API failures (ModelError) still abort
-        return {"handover": None, "error": str(e)}
+        brief, cp, info = _bundle_handover(scenario, model, caller)
+        return {"handover": brief, "error": None, "checkpoint": cp, "save_checks": info}
+    except ValidationError as e:  # save checks still failing after the retry: recorded, not fatal
+        info = getattr(e, "save_info", {"mode": "bundle", "rejected_first": False, "retry_needed": False,
+                                        "first_errors": [], "retry_errors": []})
+        return {"handover": None, "error": str(e), "save_checks": info}
 
 
 def _summary_handover(scenario: Scenario, model: Model, caller: Optional[Caller]) -> Dict[str, Any]:
@@ -234,10 +296,11 @@ def _full_handover(scenario: Scenario) -> Dict[str, Any]:
     }
 
 
-def build_handovers(scenario: Scenario, model: Model, caller: Optional[Caller] = None) -> Dict[str, Dict[str, Any]]:
+def build_handovers(scenario: Scenario, model: Model, caller: Optional[Caller] = None,
+                    handover_format: str = "bundle") -> Dict[str, Dict[str, Any]]:
     """variant -> {"handover": text | None, "error": str | None}."""
     out: Dict[str, Dict[str, Any]] = {}
-    out["checkpoint"] = _checkpoint_handover(scenario, model, caller)
+    out["checkpoint"] = _checkpoint_handover(scenario, model, caller, handover_format)
     out["summary"] = _summary_handover(scenario, model, caller)
     out["full_history"] = _full_handover(scenario)
     return out
@@ -364,7 +427,8 @@ def _eval_variant(caller: Caller, scenario: Scenario, name: str, h: Dict[str, An
 
 def run_scenario(scenario: Scenario, model: Model, timeout: Optional[float] = DEFAULT_TIMEOUT,
                  progress: Optional[TextIO] = None, workers: int = 1,
-                 limiter: Optional[Any] = None, strict_next_step: bool = False) -> Dict[str, Any]:
+                 limiter: Optional[Any] = None, strict_next_step: bool = False,
+                 handover_format: str = "bundle") -> Dict[str, Any]:
     """Run all variants and probes with 8 model calls: compaction, summary, then per variant one
     answer call and one judge call. Returns the JSON-ready results dict plus handover texts
     under the key ``_handovers`` (not part of the results file; the CLI writes them separately).
@@ -376,12 +440,12 @@ def run_scenario(scenario: Scenario, model: Model, timeout: Optional[float] = DE
     caller = Caller(model, scenario.name, timeout, progress, total=2 + 2 * len(VARIANTS),
                     limiter=limiter if workers > 1 else None)
     if workers <= 1:
-        handovers = build_handovers(scenario, model, caller)
+        handovers = build_handovers(scenario, model, caller, handover_format)
         variants: Dict[str, Any] = {name: _eval_variant(caller, scenario, name, handovers[name], strict_next_step) for name in VARIANTS}
     else:
         # compaction || summary || full_history answer; each variant's judge follows its own answer
         makers = {
-            "checkpoint": lambda: _checkpoint_handover(scenario, model, caller),
+            "checkpoint": lambda: _checkpoint_handover(scenario, model, caller, handover_format),
             "summary": lambda: _summary_handover(scenario, model, caller),
             "full_history": lambda: _full_handover(scenario),
         }
@@ -412,6 +476,7 @@ def run_scenario(scenario: Scenario, model: Model, timeout: Optional[float] = DE
         "variants": variants,
         "_handovers": {k: v["handover"] for k, v in handovers.items()},
     }
+    result["variants"]["checkpoint"]["save_checks"] = handovers["checkpoint"].get("save_checks")
     cp = handovers["checkpoint"].get("checkpoint")
     if cp is not None:
         result["_checkpoint"] = cp.to_dict()  # saved as checkpoint.json so `rescore` can score the workspace exactly
