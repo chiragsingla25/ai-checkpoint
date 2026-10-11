@@ -1,0 +1,152 @@
+{
+  "name": "housing",
+  "description": "A person in Los Angeles asks for a cost estimate for a 3-bedroom house, then for the trades involved and how to find a contractor.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "I'm planning to build a 3-bedroom independent house in los angeles, California. I want to figure out an estimate of how much it might cost me. Can you ask me any relevant questions and guide me in creating an estimate for the house that I want so I can plan accordingly? Thanks."
+    },
+    {
+      "role": "assistant",
+      "content": "# Estimate for Building a 3-Bedroom House in Los Angeles\n\nTo estimate the cost of building a 3-bedroom independent house in Los Angeles, we need to consider several factors:\n\n1. **Size of the house:** The size of the house will have a significant impact on the cost. A larger house will require more materials and labor, and will be more expensive to build. The average cost per square foot to build a house in Los Angeles is around $200 to $400.\n\n2. **Foundation type:** The type of foundation you choose will affect the cost. A concrete slab foundation is the most common and affordable option, while a basement foundation or pier and beam foundation may be more expensive.\n\n3. **Exterior materials:** The materials you choose for the exterior of the house will impact the cost. Brick or stone will be more expensive than wood or vinyl siding.\n\n4. **Interior materials:** The estimated cost of materials for the interior of the house, including flooring, kitchen, bathroom, and lighting fixtures, will also affect the overall cost.\n\n5. **Contractor or DIY:** Whether you hire a general contractor or manage the project yourself will impact the cost. Hiring a general contractor can be more expensive but may result in a more efficient and higher quality build.\n\n6. **Labor cost:** The estimated cost of labor for construction, including building, electrical, and plumbing work, will also impact the overall cost.\n\n7. **Special features:** If you plan to install any special features, such as a swimming pool, solar panels, or smart home technology, this will add to the cost.\n\n8. **Permits and fees:** There may be permits or fees that you will need to pay for during the construction process, such as building permits, impact fees, or utility connection fees.\n\nBased on these factors, the estimated cost of building a 3-bedroom independent house in Los Angeles could range from $500,000 to $1,000,000 or more. However, it's important to note that construction costs can vary widely depending on factors such as location, the complexity of the design, and the cost of labor and materials at the time of construction."
+    },
+    {
+      "role": "user",
+      "content": "Provide the list of professional who will provide those services."
+    },
+    {
+      "role": "assistant",
+      "content": "Here is a list of professionals typically involved in the construction of a 3-bedroom independent house:\n\n1. Architect: The architect designs the house and creates detailed plans, ensuring the project meets local building codes and regulations. They may also help with selecting materials, finishes, and other design elements.\n\n1. General contractor: The general contractor oversees the construction project, managing subcontractors, ordering materials, and ensuring that work is completed on schedule and within budget.\n\n1. Civil engineer: A civil engineer may be involved if the project requires significant site work, such as grading, drainage, or retaining walls.\n\n1. Structural engineer: A structural engineer ensures that the house's design is structurally sound and can withstand environmental factors such as wind and earthquakes.\n\n1. Electrician: The electrician is responsible for installing and maintaining the electrical systems in the house, including wiring, lighting, and outlets.\n\n1. Plumber: The plumber installs and maintains the plumbing system, including water supply lines, waste lines, and fixtures.\n\n1. Heating, Ventilation, and Air Conditioning (HVAC) contractor: The HVAC contractor installs and maintains the heating and cooling systems, as well as the ductwork and ventilation system.\n\n1. Painter: The painter is responsible for applying paint, stain, or other finishes to the interior and exterior surfaces of the house.\n\n1. Carpenter: The carpenter is responsible for constructing and installing wood framing, trim, cabinetry, and other woodwork throughout the house.\n\n1. Mason: The mason is responsible for constructing and installing brick, stone, or concrete block elements in the house, such as walls, fireplaces, or patios.\n\n1. Roofer: The roofer installs and maintains the roof, ensuring it is properly sealed and protected from the elements.\n\n1. Flooring installer: The flooring installer is responsible for installing various types of flooring, such as hardwood, tile, or carpet.\n\n1. Landscaper: The landscaper is responsible for designing and installing outdoor elements, such as gardens, walkways, and irrigation systems.\n\nYou may not need every professional listed here, as the specific requirements of your project will determine which services are necessary. Additionally, some professionals may provide multiple services, such as a general contractor who also offers carpentry or masonry services."
+    },
+    {
+      "role": "user",
+      "content": "do you have acces to the internet to show me who is the best contractor for my needs ?"
+    },
+    {
+      "role": "assistant",
+      "content": "Sorry, as an LLM I don't have access to the internet, nor can I access your location.\n\nMany people say that the best contractors are those you find through word-of-mouth. But if you don't have any connections, here are some sites which may have up-to-date information on the best contractors in your area:\n\n- [Better Business Bearau](https://www.bbb.org/near-me/general-contractor)\n\n- [Angie's List](https://www.angi.com/)\n\n- [Yelp](https://www.yelp.com/)\n\n- Google \"best contractors in my area\" > \"Businesses\" results"
+    }
+  ],
+  "probes": [
+    {
+      "kind": "decision",
+      "target": "decisions[0]",
+      "question": "Which foundation did the thread call the most affordable, why are the others different, and which foundation was the more expensive example?",
+      "key_facts": [
+        "A concrete slab foundation is the most common and affordable option",
+        "while a basement foundation or pier and beam foundation may be more expensive",
+        "a basement foundation"
+      ]
+    },
+    {
+      "kind": "verbatim",
+      "target": "verbatim[0]",
+      "question": "What cost per square foot did the thread give for Los Angeles?",
+      "key_facts": [
+        "$200 to $400"
+      ]
+    },
+    {
+      "kind": "verbatim",
+      "target": "verbatim[1]",
+      "question": "What total cost range did the thread give for the 3-bedroom house?",
+      "key_facts": [
+        "$500,000 to $1,000,000"
+      ]
+    },
+    {
+      "kind": "next_step",
+      "target": "next_step",
+      "question": "Which contractor site did the thread link first among the directories?",
+      "key_facts": [
+        "https://www.angi.com/"
+      ]
+    },
+    {
+      "kind": "fact",
+      "target": "environment.references",
+      "question": "Which directory URLs did the thread give for finding a contractor?",
+      "key_facts": [
+        "https://www.angi.com/",
+        "https://www.yelp.com/"
+      ]
+    }
+  ],
+  "answer_key": {
+    "decisions": [
+      {
+        "topic": "foundation type",
+        "decision": "A concrete slab foundation is the most common and affordable option",
+        "reason": "while a basement foundation or pier and beam foundation may be more expensive",
+        "rejected": "a basement foundation"
+      }
+    ],
+    "verbatim": [
+      {
+        "label": "cost per square foot",
+        "type": "number",
+        "text": "$200 to $400"
+      },
+      {
+        "label": "total estimate",
+        "type": "number",
+        "text": "$500,000 to $1,000,000"
+      },
+      {
+        "label": "contractor directory",
+        "type": "command",
+        "text": "https://www.angi.com/"
+      }
+    ],
+    "next_step": {
+      "text": "https://www.angi.com/",
+      "required_terms": [
+        "angi.com",
+        "yelp.com"
+      ]
+    }
+  },
+  "environment": {
+    "references": [
+      {
+        "name": "Angie's List",
+        "url": "https://www.angi.com/",
+        "status": "still_relevant"
+      },
+      {
+        "name": "Yelp",
+        "url": "https://www.yelp.com/",
+        "status": "still_relevant"
+      },
+      {
+        "name": "Better Business Bearau",
+        "url": "https://www.bbb.org/near-me/general-contractor",
+        "status": "still_relevant"
+      }
+    ]
+  },
+  "secret_values": [],
+  "meta": {
+    "seed": null,
+    "task": "housing",
+    "length": 6,
+    "generator": "handover-v3",
+    "filler_indexes": [],
+    "next_step_index": 5,
+    "source": {
+      "dataset": "OpenAssistant/oasst1",
+      "revision": "2023-04-12",
+      "license": "Apache-2.0",
+      "url": "https://huggingface.co/datasets/OpenAssistant/oasst1",
+      "message_tree_id": "c8d96c22-74f3-44cf-867a-ee7ade06283b",
+      "message_ids": [
+        "c8d96c22-74f3-44cf-867a-ee7ade06283b",
+        "22ca8963-08fd-4e41-9043-231da4ca9990",
+        "3be78001-3c57-44e6-8160-0152975a3b93",
+        "e31afd77-afd4-404d-8ccf-7be6227f1a2f",
+        "12bb6c17-cb75-42c7-85a2-3a2ec92e67ed",
+        "30d0ee96-0693-4c6d-9230-78d89dc4eab0"
+      ]
+    }
+  }
+}

@@ -102,6 +102,30 @@ def test_brief_opens_with_next_action_then_user_plan(store):
     assert brief == (cp_path(store, r.checkpoint_id) / "brief.md").read_text(encoding="utf-8")
 
 
+def test_next_action_leads_with_recap_sentence(store):
+    recap = ("Where we are: the table is agreed. "
+             "Next step: write the file, apply it on staging, then add the replay test. "
+             "The module is app/webhooks.py.")
+    r = save(store, [T("write the file")], checkpoint_name="p-recap",
+             last_exchange={"user": "what's next?", "assistant": recap})
+    assert r.next_action == {"task_id": "t-1", "text": "write the file"}
+    brief = render_brief(store.get(r.checkpoint_id))
+    head = brief.split("## Objective")[0]
+    sentence = "Next step: write the file, apply it on staging, then add the replay test."
+    assert sentence in head
+    assert head.index(sentence) < head.index("**[t-1]** write the file")
+    assert "Next action saved: write the file. Correct?" in r.to_dict()["message"]
+
+
+def test_next_step_sentence_falls_back_to_the_user(store):
+    r = save(store, [T("write the file")], checkpoint_name="p-user-step",
+             last_exchange={"user": "Next step: apply it on staging, then add the replay test.",
+                            "assistant": "ok"})
+    brief = render_brief(store.get(r.checkpoint_id))
+    head = brief.split("## Objective")[0]
+    assert "Next step: apply it on staging, then add the replay test." in head
+
+
 def test_next_action_shows_quote_for_user_task(store):
     r = save(store, [T("write report", **{"from": "user"}, quote="then write the report")],
              checkpoint_name="p5", user_turns=["Then write the report."])

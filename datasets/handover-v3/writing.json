@@ -1,0 +1,143 @@
+{
+  "name": "writing",
+  "description": "A person asks for a 200-word family-medicine residency essay and then says the draft is 188 words.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Write a 200 word essay that describes my interest in joining a family medicine residency program. In the program mention that I had multiple publications in med school as well as my high academic grade."
+    },
+    {
+      "role": "assistant",
+      "content": "As a medical student, I have always had a passion for providing comprehensive, patient-centered care. I believe that family medicine provides the ideal platform for me to fulfill this desire, as it allows me to develop strong, long-lasting relationships with patients and provide them with continuity of care throughout their lives.\n\nDuring medical school, I was fortunate enough to have several opportunities to publish my work in peer-reviewed journals, which has further solidified my interest in pursuing a career in family medicine. My academic achievements were also noteworthy, as I consistently maintained a high GPA and was recognized for my academic excellence on multiple occasions.\n\nI am confident that a family medicine residency program will provide me with the comprehensive training and hands-on experience that I need to succeed as a primary care physician. I am eager to learn from experienced mentors, work alongside interdisciplinary teams, and serve diverse patient populations. Furthermore, I believe that a family medicine residency program will provide me with the opportunity to make a meaningful impact on my patients' lives, and to contribute to the overall improvement of the health of my community."
+    },
+    {
+      "role": "user",
+      "content": "This is actually 188 words, not 200 words. Could you please give me one that's more close to 200 words?"
+    },
+    {
+      "role": "assistant",
+      "content": "Okay, here is a longer version of the above essay:\nAs a future primary care physician, I am determined to bring my passion for patient-centered care to the forefront of my practice. I understand the importance of developing strong relationships with my patients and providing them with the continuity of care that they need and deserve. My academic achievements, including my publications in peer-reviewed journals, have only strengthened my interest in pursuing a career in family medicine.\n\nAs a medical student, I have learned the importance of interdisciplinary collaboration and I am eager to work alongside other healthcare professionals to provide the best possible care to my patients. I am confident that a family medicine residency program will provide me with the comprehensive training and hands-on experience that I need to succeed in my future practice.\n\nIn addition to acquiring the necessary knowledge and skills, I am also looking forward to the opportunity to make a meaningful impact on my patients' lives and to contribute to the overall improvement of the health of my community. I believe that family medicine is the ideal platform for me to satisfy my passion for patient centered care and I am eager to embark on this exciting journey as a resident in a family medicine program."
+    }
+  ],
+  "probes": [
+    {
+      "kind": "decision",
+      "target": "decisions[0]",
+      "question": "What length did I ask the essay to move to, why, and what length was the draft we set aside?",
+      "key_facts": [
+        "give me one that's more close to 200 words",
+        "This is actually 188 words, not 200 words.",
+        "188 words"
+      ],
+      "known_wrong": [
+        "The essay we are keeping is 188 words"
+      ]
+    },
+    {
+      "kind": "verbatim",
+      "target": "verbatim[0]",
+      "question": "How long did I say the first draft was?",
+      "key_facts": [
+        "188 words"
+      ]
+    },
+    {
+      "kind": "stale",
+      "target": "correction",
+      "question": "What essay length are we aiming for now?",
+      "key_facts": [
+        "200 words"
+      ],
+      "known_wrong": [
+        "188 words"
+      ]
+    },
+    {
+      "kind": "next_step",
+      "target": "next_step",
+      "question": "What did I ask for after counting the first draft?",
+      "key_facts": [
+        "give me one that's more close to 200 words"
+      ]
+    },
+    {
+      "kind": "fact",
+      "target": "environment.references",
+      "question": "Which residency field is the essay about?",
+      "key_facts": [
+        "family medicine"
+      ]
+    }
+  ],
+  "answer_key": {
+    "decisions": [
+      {
+        "topic": "the length of the residency essay",
+        "decision": "give me one that's more close to 200 words",
+        "reason": "This is actually 188 words, not 200 words.",
+        "rejected": "188 words"
+      }
+    ],
+    "verbatim": [
+      {
+        "label": "length of the first draft",
+        "type": "number",
+        "text": "188 words"
+      },
+      {
+        "label": "requested length",
+        "type": "number",
+        "text": "200 words"
+      },
+      {
+        "label": "the essay's field",
+        "type": "code",
+        "text": "family medicine"
+      }
+    ],
+    "correction": {
+      "what": "essay length",
+      "old": "188 words",
+      "new": "200 words"
+    },
+    "next_step": {
+      "text": "give me one that's more close to 200 words",
+      "required_terms": [
+        "200 words",
+        "188 words"
+      ]
+    }
+  },
+  "environment": {
+    "references": [
+      {
+        "name": "family medicine",
+        "status": "still_relevant"
+      }
+    ]
+  },
+  "secret_values": [],
+  "meta": {
+    "seed": null,
+    "task": "writing",
+    "length": 4,
+    "generator": "handover-v3",
+    "filler_indexes": [],
+    "next_step_index": 2,
+    "source": {
+      "dataset": "OpenAssistant/oasst1",
+      "revision": "2023-04-12",
+      "license": "Apache-2.0",
+      "url": "https://huggingface.co/datasets/OpenAssistant/oasst1",
+      "message_tree_id": "9ad8fca7-934a-4fbd-86b0-1e5504ae9949",
+      "message_ids": [
+        "9ad8fca7-934a-4fbd-86b0-1e5504ae9949",
+        "8a5f7119-7682-402e-ab04-ed3f88acda60",
+        "f5fb827a-f740-4d39-b173-57a09de625ac",
+        "2b036408-bdd2-40a5-9886-004ad4fccd02"
+      ]
+    },
+    "correction_old_index": 2,
+    "correction_new_index": 2
+  }
+}

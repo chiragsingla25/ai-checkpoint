@@ -250,4 +250,56 @@ def test_v1_reproducible_with_version_flag_and_bogus_version(tmp_path, capsys):
     assert "handover-v1" in err and "handover-v2" in err
     with pytest.raises(ValueError, match="handover-v2"):
         generate_scenario("coding", 20, 7, "bogus")
-    assert VERSIONS == ("handover-v1", "handover-v2")
+    assert VERSIONS == ("handover-v1", "handover-v2", "handover-v3")
+
+
+# ------------------------------------------------------------------ handover-v3 (OpenAssistant conversations)
+DATASET_V3 = ROOT / "datasets" / "handover-v3"
+V3_SUBJECTS = (
+    "coding", "data_analysis", "writing", "literature", "housing", "manufacturing",
+    "engineering", "games", "geography", "hardware", "learning",
+)
+
+
+def test_v3_messages_are_the_openassistant_threads():
+    from ai_checkpoint.eval.v3 import build_scenarios
+    src = json.loads((DATASET_V3 / "sources" / "oasst1_threads.json").read_text())
+    assert src["dataset"] == "OpenAssistant/oasst1" and src["license"] == "Apache-2.0"
+    threads = {t["subject"]: t for t in src["threads"]}
+    assert set(threads) == set(V3_SUBJECTS)
+    with pytest.raises(ValueError, match="OpenAssistant"):
+        generate_scenario("coding", 20, 7, "handover-v3")
+    for scn in build_scenarios():
+        assert check_scenario(scn) == [], scn["name"]
+        parse_scenario(scn)
+        thread = threads[scn["name"]]
+        got = [(m["role"], m["content"]) for m in scn["messages"]]
+        expect = [("user" if m["role"] == "prompter" else "assistant", m["text"].strip()) for m in thread["messages"]]
+        assert got == expect
+        assert scn["secret_values"] == []
+        assert scn["meta"]["filler_indexes"] == []
+        assert scn["meta"]["source"]["message_tree_id"] == thread["message_tree_id"]
+        corr = scn["answer_key"].get("correction")
+        if corr:
+            chat = "\n".join(m["content"] for m in scn["messages"]).lower()
+            assert chat.find(corr["old"].lower()) < chat.find(corr["new"].lower())
+        assert {p["kind"] for p in scn["probes"]} >= {"decision", "verbatim", "next_step", "fact"}
+
+
+def test_v3_committed_dataset_is_byte_identical_and_documented(tmp_path):
+    readme = (DATASET_V3 / "README.md").read_text()
+    assert "--seed 7" in readme and "--version handover-v3" in readme
+    assert "OpenAssistant/oasst1" in readme
+    assert main(["generate", "--seed", "7", "--version", "handover-v3", "--out", str(tmp_path)]) == 0
+    for n in V3_SUBJECTS:
+        assert (DATASET_V3 / f"{n}.json").read_bytes() == (tmp_path / f"{n}.json").read_bytes()
+    assert sorted(p.name for p in DATASET_V3.glob("*.json")) == sorted(n + ".json" for n in V3_SUBJECTS)
+
+
+@pytest.mark.parametrize("name", V3_SUBJECTS)
+def test_v3_loads_and_runs_with_fake(name, tmp_path):
+    path = DATASET_V3 / f"{name}.json"
+    sc = load_scenario(path)
+    assert sc.name == name and sc.messages and sc.answer_key
+    assert main(["run", str(path), "--model", "fake", "--out", str(tmp_path)]) == 0
+    assert (tmp_path / "results.json").exists()

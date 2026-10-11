@@ -42,7 +42,8 @@ their messages. Never invent a quote. Put those messages in `user_turns` (the us
 messages, word for word). Steps you propose yourself have `from` "ai" and no quote. List \
 finished steps too, as done. At least one task must be todo or in_progress. The server \
 numbers them for you; in depends_on, task k of your list is t-k. It works out the next \
-action itself.
+action itself. When the closing recap states the next step in one sentence that starts with \
+"Next step:", that unfinished task's text is the whole sentence, not only its first clause.
 - Old form: `next_steps` (strings, the user's own steps first, each starting with the exact \
 text "User's plan:") still works, but prefer `tasks`.
 
@@ -89,7 +90,11 @@ FIELD_DESCRIPTIONS = {
     ),
     "plan_updates.id": "Id of an existing task from the brief, e.g. \"t-2\". Leave out for a new task.",
     "plan_updates.text": "New tasks only: what to do. Existing tasks cannot be reworded.",
-    "tasks.text": "What to do: one concrete step the next AI can follow without asking.",
+    "tasks.text": (
+        "What to do. When the closing recap has a sentence starting \"Next step:\", use that "
+        "whole sentence here, not only its first clause. Otherwise one concrete step the next "
+        "AI can follow without asking."
+    ),
     "tasks.status": "todo, in_progress or done. Steps already finished are listed too, as done.",
     "tasks.from": "\"user\" if the user asked for this step, \"ai\" if you propose it.",
     "tasks.quote": (

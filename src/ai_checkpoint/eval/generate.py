@@ -4,10 +4,10 @@
 answer key, environment manifest, probes). The same arguments always give the
 same bytes. Two task types (coding, data_analysis) x three lengths (20/50/100).
 
-A conversation is a fixed storyline of 8 core exchanges (intro, code/data paste
-with a fake secret, options, decision 1, decision 2 question, decision 2 plus a
-renamed file, a correction of an earlier value, wrap-up with the next step) with
-varied filler exchanges inserted between them at seeded random positions.
+A conversation is a fixed storyline of core exchanges (intro, a paste with a
+fake secret, options, decisions, a renamed file, a correction, wrap-up with the
+next step) with varied filler exchanges inserted between them at seeded random
+positions. handover-v3 is separate: fixed human conversations from OpenAssistant.
 """
 from __future__ import annotations
 
@@ -23,7 +23,8 @@ LENGTHS = (20, 50, 100)
 # handover-v1 is the first dataset, kept reproducible byte for byte (its chats leave some key facts unstated).
 # handover-v2 uses the same storylines and the same random draws, but states every answer-key fact,
 # manifest item, env var and decision reason in the chat (see ``check_scenario``).
-VERSIONS = ("handover-v1", "handover-v2")
+# handover-v3 is eleven human OpenAssistant threads (several subjects), not the synthetic storylines.
+VERSIONS = ("handover-v1", "handover-v2", "handover-v3")
 DEFAULT_VERSION = "handover-v1"
 
 Pair = Tuple[str, str]
@@ -372,19 +373,24 @@ def generate_scenario(task: str, length: int, seed: int, version: str = DEFAULT_
         raise ValueError(f"unknown length: {length!r}")
     if version not in VERSIONS:
         raise ValueError(f"unknown version: {version!r} (valid versions: {', '.join(VERSIONS)})")
-    # the random stream is the same for every version, so v2 differs from v1 only where the text was fixed
+    if version == "handover-v3":
+        raise ValueError("handover-v3 is a fixed set of OpenAssistant conversations; generate it with generate_dataset")
+    # v1 and v2 share a random stream, so v2 differs from v1 only where the text was fixed.
     rng = random.Random(f"handover-v1|{seed}|{task}|{length}")
     v2 = version == "handover-v2"
     story = _coding_story(rng, v2) if task == "coding" else _data_story(rng, v2)
     beats: List[Pair] = story["beats"]
     n_pairs = length // 2
     n_fill = n_pairs - len(beats)
+    if n_fill < 0:
+        raise ValueError(f"{version} {task}-{length} has {len(beats)} story beats but only {n_pairs} turns")
     pool = list(story["fillers"])
     rng.shuffle(pool)
     fillers = [(u.replace("<P>", story["project"]), a.replace("<P>", story["project"])) for u, a in pool[:n_fill]]
     # gap g = before core beat g. The intro stays first and the wrap-up last, and a question is never
     # separated from the decision that answers it (no gap before beats 3 and 5).
-    allowed = [1, 2, 4, 6, 7]
+    # v3 keeps fillers out of the early gaps so the abandoned folder stays in the first part of the chat.
+    allowed = story.get("filler_gaps", [1, 2, 4, 6, 7])
     gaps: Dict[int, List[Pair]] = {g: [] for g in allowed}
     for f in fillers:
         gaps[rng.choice(allowed)].append(f)
@@ -399,12 +405,16 @@ def generate_scenario(task: str, length: int, seed: int, version: str = DEFAULT_
         messages += [dict(role="user", content=u), dict(role="assistant", content=a)]
     corr = story["answer_key"]["correction"]
     first = lambda s: next(i for i, m in enumerate(messages) if s in m["content"])
+    roles = story.get("beat_roles", {"correction": 6, "rename": 5, "abandon": 3, "next": 7})
     meta = dict(
         seed=seed, task=task, length=length, generator=version,
-        correction_old_index=first(corr["old"]), correction_new_index=beat_idx[6],
-        rename_index=beat_idx[5], abandon_index=beat_idx[3], next_step_index=beat_idx[7],
+        correction_old_index=first(corr["old"]), correction_new_index=beat_idx[roles["correction"]],
+        rename_index=beat_idx[roles["rename"]], abandon_index=beat_idx[roles["abandon"]],
+        next_step_index=beat_idx[roles["next"]],
         filler_indexes=filler_idx,
     )
+    if story.get("source"):
+        meta["source"] = story["source"]
     return dict(
         name=f"{task}-{length}",
         description=story["description"],
@@ -463,6 +473,14 @@ def check_scenario(scn: Dict[str, Any]) -> List[str]:
 def generate_dataset(seed: int, out_dir, version: str = DEFAULT_VERSION) -> List[Path]:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
+    if version == "handover-v3":
+        from .v3 import build_scenarios
+        paths = []
+        for scn in build_scenarios():
+            p = out / f"{scn['name']}.json"
+            p.write_text(render(scn), encoding="utf-8")
+            paths.append(p)
+        return paths
     paths = []
     for task in TASKS:
         for length in LENGTHS:

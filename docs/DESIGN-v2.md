@@ -300,13 +300,15 @@ In a fresh `tasks` list, "Task t-k" in a message is the **position** k in the li
 
 Test case that must hold: t-1 done, t-2 todo depends_on [t-3], t-3 todo -> next action is t-3.
 
-**Save echo.** The save result text ends with a line `Next action saved: <task text>. Correct?`; when there is no next action it ends `Next action saved: none (<reason>). Correct?` The first line is as today (new id, name, commit hash).
+**Brief heading.** The stored next action stays that task (`plan.json` `next_action` is still its id and text). When the brief is rendered, if `last_exchange.assistant` contains a sentence starting with `Next step:` (otherwise `last_exchange.user`), `## Next action` leads with that sentence, through its closing period. The task line follows on the next line. The sentence is read from `core.json` `last_exchange` at render time; it is not written into `plan.json`. A last exchange with no such sentence leaves the heading as the task line alone. A closing recap that states several actions in one `Next step:` sentence is saved as that whole sentence in the unfinished task's `text`, not only its first clause; the heading rule still applies when a save splits the sentence anyway.
+
+**Save echo.** The save result text ends with a line `Next action saved: <task text>. Correct?`; when there is no next action it ends `Next action saved: none (<reason>). Correct?` The echo is the task text, not the `Next step:` sentence. The first line is as today (new id, name, commit hash).
 
 ## 10. Brief layout
 
 `render_brief(bundle)` is deterministic. The preamble (the "You are continuing work from checkpoint cp-004 (forecast/forecast-v2), saved ... in ..." paragraph, the "You have not seen that conversation" paragraph, and the "saved from a chat resumed from cp-003" line) is the same as today's. Sections in fixed order; an empty optional section prints `_(none recorded)_` except where stated.
 
-1. `## Next action` — the computed task: `**[t-2]** Write the report`, and when it has a quote: `The user said: "then write the report for Dana"`. Or the "none" text from section 9.
+1. `## Next action` — when the last exchange states a `Next step:` sentence (section 9), that sentence first. Then the computed task: `**[t-2]** Write the report`, and when it has a quote: `The user said: "then write the report for Dana"`. Or the "none" text from section 9, still after the sentence when one exists.
 2. `## The user's plan` — `from=user` tasks in `order` with status, id, text, quote, dependencies: `- [t-1] (done) Run the backtest ... — user said: "first run a backtest on the last year"`. Omitted if there are none.
 3. `## Other planned work` — `from=ai` tasks the same way. Omitted if there are none.
 4. `## Waiting on you (the user)` — open questions with `waiting_on_user`. Omitted if none.

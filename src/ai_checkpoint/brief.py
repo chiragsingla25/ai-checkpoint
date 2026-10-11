@@ -203,23 +203,47 @@ def _task_line(t: dict) -> str:
     return line
 
 
-def _next_action_section(info: dict) -> str:
+_NEXT_STEP_RE = re.compile(r"Next step:\s*\S.*?\.")
+
+
+def next_step_sentence(user: str, assistant: str) -> str:
+    """The ``Next step:`` sentence from the assistant recap, else from the user.
+
+    Through the closing period. Empty when neither side has one.
+    """
+    for text in (assistant or "", user or ""):
+        m = _NEXT_STEP_RE.search(text)
+        if m:
+            return _label(m.group(0))
+        rest = re.search(r"Next step:\s*\S.*", text)
+        if rest:
+            return _label(rest.group(0))
+    return ""
+
+
+def _next_action_section(info: dict, exchange=None) -> str:
     if info["action"]:
         t = info["task"]
         text = f"**[{t['id']}]** {_label(t['text'])}"
         if t.get("quote"):
             text += f'\nThe user said: "{_label(t["quote"])}"'
-        return text
-    if info["all_done"]:
-        return "No unfinished tasks. Ask the user what to do next."
-    parts = ["No task is ready."]
-    if info["in_progress"]:
-        parts.append("In progress: " + ", ".join(
-            f'{t["id"]} "{_label(t["text"])}"' for t in info["in_progress"]) + ".")
-    if info["blocked"]:
-        parts.append("Blocked: " + ", ".join(
-            f"{t['id']} (waiting on {', '.join(u)})" for t, u in info["blocked"]) + ".")
-    return " ".join(parts)
+    elif info["all_done"]:
+        text = "No unfinished tasks. Ask the user what to do next."
+    else:
+        parts = ["No task is ready."]
+        if info["in_progress"]:
+            parts.append("In progress: " + ", ".join(
+                f'{t["id"]} "{_label(t["text"])}"' for t in info["in_progress"]) + ".")
+        if info["blocked"]:
+            parts.append("Blocked: " + ", ".join(
+                f"{t['id']} (waiting on {', '.join(u)})" for t, u in info["blocked"]) + ".")
+        text = " ".join(parts)
+    sentence = ""
+    if exchange is not None:
+        sentence = next_step_sentence(exchange.user, exchange.assistant)
+    if sentence:
+        return sentence + "\n\n" + text
+    return text
 
 
 def _no_longer_needed(ws: dict) -> str:
@@ -260,7 +284,7 @@ def _render_v2(cp: Checkpoint) -> str:
         return sorted(tasks, key=lambda t: (t["order"], structured.task_number(t["id"])))
 
     info = structured.next_action_info(v2.tasks)
-    section("Next action", _next_action_section(info))
+    section("Next action", _next_action_section(info, cp.last_exchange))
     mine = [t for t in ordered(v2.tasks) if t["from"] == "user"]
     if mine:
         section("The user's plan", "These are the steps the user asked for, in their own words "

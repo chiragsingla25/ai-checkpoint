@@ -1,0 +1,149 @@
+{
+  "name": "games",
+  "description": "A person compares web game engines, then narrows it to a one-weekend charity game with little coding experience, and asks about the Unreal license.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What are some viable game engines for use in the web as well as what are the pros and cons of each?"
+    },
+    {
+      "role": "assistant",
+      "content": "There are many  game engines that are suitable for developing games for the web. Here are some popular options and their pros and cons:\n\n- Unity: Unity is a widely used game engine that allows you to create games for multiple platforms including the web. It offers a variety of features such as a powerful editor, support for multiple platforms, and a large community of developers. However, Unity has a steep learning curve and can be resource-intensive.\n- Unreal Engine: Unreal Engine is another popular game engine that offers advanced features such as real-time rendering and advanced physics simulation. It is also suitable for developing games for the web. However, like Unity, Unreal Engine also has a steep learning curve and can be resource-intensive.\n- Phaser: Phaser is an open-source game engine that is specifically designed for developing games for the web. It is easy to learn, lightweight, and offers a range of features such as 2D physics and audio support. However, Phaser is limited to 2D games and may not be suitable for more complex games.\n- Godot: Godot is a free and open-source game engine that offers a range of features such as a powerful editor, visual scripting, and support for multiple platforms including the web. It is easy to learn and has a growing community of developers. However, Godot may not be suitable for more complex games and its documentation is not as comprehensive as some other game engines.\n- Construct: Construct is a game engine that is specifically designed for developing 2D games for the web. It offers an intuitive drag-and-drop interface and a range of features such as physics simulation and animation tools. However, Construct may not be suitable for more complex games and its performance may not be as optimized as some other game engines.\n\nUltimately, the choice of game engine will depend on the specific requirements of your game and your own preferences as a developer."
+    },
+    {
+      "role": "user",
+      "content": "Are there any of these choices that are more geared toward small indie developers and solo developers? My friends and myself are looking to try creating a game for charity over the course of one weekend, only a couple of us have coding experience."
+    },
+    {
+      "role": "assistant",
+      "content": "The ideal choice depends on the game you wish to create and the skillset of the team. Unreal Engine might be favorable for your project due to the sheer amount of high quality assets available for free and their relatively laxed approach to indie projects. Unity is a very popular engine with people getting into game development, due to the large amount of tutorials available for learning. The lack of coding experience should not be too detrimental to your project, as all these engines provide ways of implementing game logic other than scripting (e.g. drag and drop blocks) and have a large amount of game logic ready to be used by you such as physics or AI."
+    },
+    {
+      "role": "user",
+      "content": "When you say that Unreal Engine has a relatively lax approach to indie projects, do you mean that the end user license agreement has relatively few restrictions?"
+    },
+    {
+      "role": "assistant",
+      "content": "When I say that Unreal Engine has a relatively lax approach to indie projects, I'm referring to a combination of factors, including the end user license agreement (EULA), pricing model, and the support provided by Epic Games.\n\nThe Unreal Engine EULA is relatively permissive when it comes to indie projects. The EULA allows developers to use the engine for free as long as they meet certain revenue thresholds. For example, developers can use the engine for free if their gross revenue from the product is less than $1 million per year. This makes it easier for indie developers to get started with Unreal Engine without having to pay upfront licensing fees.\n\nIn addition, Epic Games has created various programs to support indie developers using Unreal Engine, such as the Unreal Dev Grants program, which provides funding to developers working on innovative projects, and the Unreal Marketplace, which allows developers to sell their assets and content to other developers.\n\nFurthermore, Unreal Engine's pricing model is generally considered more favorable to indie developers compared to other game engines. Unlike some other engines, Unreal Engine does not charge developers a percentage of their revenue as a licensing fee. Instead, they charge a flat 5% royalty fee on gross revenue after the first $1 million, which can be more cost-effective for indie developers.\n\nOverall, Unreal Engine's approach to indie projects is generally considered to be more permissive and supportive compared to other game engines. This makes it an attractive option for indie developers who are looking to create high-quality games without having to worry about high licensing fees or restrictive license agreements."
+    }
+  ],
+  "probes": [
+    {
+      "kind": "decision",
+      "target": "decisions[0]",
+      "question": "Which engine did the thread call favorable for the weekend project, which other engine did it mention for beginners, and which engine did it say is limited to 2D?",
+      "key_facts": [
+        "Unreal Engine might be favorable for your project due to the sheer amount of high quality assets available for free",
+        "Unity is a very popular engine with people getting into game development, due to the large amount of tutorials available for learning.",
+        "Phaser is limited to 2D games and may not be suitable for more complex games."
+      ]
+    },
+    {
+      "kind": "verbatim",
+      "target": "verbatim[0]",
+      "question": "Below what yearly gross revenue did the thread say Unreal Engine is free?",
+      "key_facts": [
+        "less than $1 million per year"
+      ]
+    },
+    {
+      "kind": "verbatim",
+      "target": "verbatim[1]",
+      "question": "What royalty did the thread say Unreal charges after that threshold?",
+      "key_facts": [
+        "flat 5% royalty fee"
+      ]
+    },
+    {
+      "kind": "next_step",
+      "target": "next_step",
+      "question": "On what revenue condition did the thread say developers can use Unreal Engine for free?",
+      "key_facts": [
+        "developers can use the engine for free if their gross revenue from the product is less than $1 million per year"
+      ]
+    },
+    {
+      "kind": "fact",
+      "target": "environment.tools",
+      "question": "Which engine did the thread say is limited to 2D games?",
+      "key_facts": [
+        "Phaser"
+      ]
+    }
+  ],
+  "answer_key": {
+    "decisions": [
+      {
+        "topic": "engine for a weekend charity game",
+        "decision": "Unreal Engine might be favorable for your project due to the sheer amount of high quality assets available for free",
+        "reason": "Unity is a very popular engine with people getting into game development, due to the large amount of tutorials available for learning.",
+        "rejected": "Phaser is limited to 2D games and may not be suitable for more complex games."
+      }
+    ],
+    "verbatim": [
+      {
+        "label": "free tier",
+        "type": "number",
+        "text": "less than $1 million per year"
+      },
+      {
+        "label": "royalty",
+        "type": "number",
+        "text": "flat 5% royalty fee"
+      },
+      {
+        "label": "engine set aside",
+        "type": "code",
+        "text": "Phaser is limited to 2D games"
+      }
+    ],
+    "next_step": {
+      "text": "developers can use the engine for free if their gross revenue from the product is less than $1 million per year",
+      "required_terms": [
+        "Unreal Engine",
+        "$1 million",
+        "5%"
+      ]
+    }
+  },
+  "environment": {
+    "tools": [
+      {
+        "name": "Unreal Engine",
+        "status": "still_relevant"
+      },
+      {
+        "name": "Unity",
+        "status": "still_relevant"
+      },
+      {
+        "name": "Phaser",
+        "status": "done_with"
+      }
+    ]
+  },
+  "secret_values": [],
+  "meta": {
+    "seed": null,
+    "task": "games",
+    "length": 6,
+    "generator": "handover-v3",
+    "filler_indexes": [],
+    "next_step_index": 5,
+    "source": {
+      "dataset": "OpenAssistant/oasst1",
+      "revision": "2023-04-12",
+      "license": "Apache-2.0",
+      "url": "https://huggingface.co/datasets/OpenAssistant/oasst1",
+      "message_tree_id": "d194f5b4-aad0-4706-a798-a2ed80e967f7",
+      "message_ids": [
+        "d194f5b4-aad0-4706-a798-a2ed80e967f7",
+        "52554da2-18d2-409c-95f9-5fcca4eea854",
+        "d333a807-a706-4daa-975b-11b3084b1b4b",
+        "fe603fb5-90e1-47d2-a5e2-397bae23230a",
+        "6e12a544-207f-488f-b367-015ebba18246",
+        "8b36ff9a-0c57-4e23-b35c-16ea8f68f27f"
+      ]
+    }
+  }
+}

@@ -85,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--seed", type=int, default=7, help="integer seed (default 7; the committed dataset uses 7)")
     g.add_argument("--version", choices=VERSIONS, default=DEFAULT_VERSION,
                    help="dataset version: " + ", ".join(VERSIONS) + f" (default {DEFAULT_VERSION}, the first run's dataset; "
-                   "handover-v2 states every key fact in the chat)")
+                   "handover-v2 states every key fact in the chat; handover-v3 uses OpenAssistant conversations)")
     g.add_argument("--out", required=True, help="output directory (created if missing)")
     return p
 

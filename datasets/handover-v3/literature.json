@@ -1,0 +1,136 @@
+{
+  "name": "literature",
+  "description": "A person asks how to write a clear essay, then narrows it to a book or movie whose main character makes a hard choice.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "How can I write an essay which can be effective and allow the reader to understand my text with ease? Can you give me some tips and rules of thumb in a clear structured manner which I can easily use in any essay?"
+    },
+    {
+      "role": "assistant",
+      "content": "Yes, of course! Here are some tips for writing an effective and easily understandable essay:\n\n1. Choose a clear and concise topic: Make sure that your topic is specific, well defined, and relevant to your audience. A clear topic will help you focus your writing and make it easier for your readers to understand your text.\n\n2. Plan your essay: Before you start writing, it's important to plan your essay. This will help you organize your thoughts and ideas, and ensure that your essay has a clear structure. Use an outline to plan your introduction, body paragraphs, and conclusion.\n\n3. Use simple language: Avoid complex words and sentences, and use simple language that is easy for your readers to understand. Use short, simple sentences, and avoid technical jargon, unless it is absolutely necessary.\n\n4. Provide background information: Provide enough background information so that your readers can understand the context of your essay. This will help them better understand your arguments and perspectives.\n\n5. Use examples: Use examples to illustrate your points and make your writing more engaging. Examples can help your readers better understand your text and retain the information you are presenting.\n\n6. Be concise: Avoid using redundant or irrelevant information, and focus on the most important points. Make sure that each sentence contributes to your overall argument, and avoid using filler words or phrases.\n\n7. Use clear and concise transitions: Transitions help connect your ideas and make your writing flow smoothly. Use clear and concise transitions, such as \"first,\" \"second,\" \"finally,\" etc. to connect your ideas.\n\n8. Conclude effectively: Your conclusion should summarize your main points and provide a final perspective on your topic. Make sure that your conclusion is clear, concise, and leaves a lasting impression on your reader.\n\n9. Proofread and edit: Proofread and edit your essay carefully to ensure that it is free of errors, typos, and grammatical mistakes. This will help you present a professional and polished essay that is easy for your readers to understand.\n\nBy following these tips, you can write an essay that is effective, clear, and easy for your readers to understand. Good luck!"
+    },
+    {
+      "role": "user",
+      "content": "My English teacher has asked me to write an essay with the following prompt, \"Describe a favorite book or movie where the main character has to decide something difficult. What did you think about their choice?\" Can you give me some ideas for books or movies that I might write about and tell me what choice the character had to make in each?"
+    },
+    {
+      "role": "assistant",
+      "content": "I would recommend watching the Oscar winning movie \"No Country for Old Men\", based on a novel by acclaimed American author Cormac McCarthy, where the main character Llewelen Moss has to decide between keeping a large sum of money he found or giving up the money to escape the seemingly unstoppable hitman Anton Chigurh. The story dealt with the changing nature of violence and evil, as well as the character death of the traditional western hero and will surely provoke some deep insights for your essay."
+    },
+    {
+      "role": "user",
+      "content": "Can you give more details?"
+    },
+    {
+      "role": "assistant",
+      "content": "\"No Country for Old Men,\" by Cormac McCarthy, is a novel that delves deep into the psyche of its main characters, exploring their motivations, fears, and desires. The novel presents a violent and bleak world, where evil seems to reign unchecked, and traditional values and heroes are no match for the brutality of reality.\n\nAnton Chigurh, the novel's primary antagonist, is a chilling embodiment of evil. He is a remorseless killer who moves through the story with a sense of purpose and calmness that is both terrifying and fascinating. He is a man of few words, but his actions speak volumes. Chigurh is a man who believes in fate, in the idea that some things are meant to be, and that he is merely an instrument of a higher power. He sees himself as a judge, a dispenser of justice, but his idea of justice is skewed and twisted. Chigurh is a man who derives pleasure from killing, who sees it as a necessary part of his mission. He is a man who has no qualms about taking innocent lives if it serves his purposes.\n\nDespite his outward calmness, Chigurh is a deeply disturbed individual. He has a complex set of psychological issues, including narcissism, sadism, and a pathological need for control. He is a man who cannot tolerate any form of resistance, who must always have the upper hand. His need for control is so intense that he is willing to subject himself to physical harm to maintain it. Chigurh is a man who is driven by a deep sense of purpose, but that purpose is twisted by his mental illness and his warped worldview.\n\nIn contrast to Chigurh, Sheriff Ed Tom Bell, the novel's protagonist, is a man struggling to come to terms with a changing world. He is a man who has spent his entire life upholding traditional values and protecting his community, but he is increasingly disillusioned by the violence and evil that seem to be taking over. Bell is a man haunted by the horrors he has witnessed, and he is struggling to find meaning in a world that seems to have lost its moral compass.\n\nBell is a complex character, struggling to reconcile his traditional values with the harsh realities of the modern world. He is a man who believes in justice, but he is increasingly aware of the limitations of the justice system. He is a man who believes in the power of the law, but he is also aware of its limitations. Bell is a man who has seen the worst of humanity, but he still believes in the inherent goodness of people. He is a man struggling to find a sense of purpose in a world that seems to be spiraling out of control.\n\nIn many ways, Bell and Chigurh are two sides of the same coin. They are both men struggling to come to terms with a changing world, but their responses to that world are vastly different. Chigurh represents the brutal, violent, and amoral side of humanity, while Bell represents the traditional values of justice, morality, and decency. Their conflict represents a larger conflict between the old and the new, between traditional values and modern realities, and between good and evil.\n\nIn conclusion, \"No Country for Old Men\" presents two complex and deeply flawed characters struggling to make sense of a violent and changing world. Chigurh is a man driven by a twisted sense of purpose and a pathological need for control, while Bell is a man struggling to uphold traditional values in a world that seems to have lost its moral compass. Their conflict represents a larger conflict between old and new, between traditional values and modern realities, and between good and evil. The novel is a haunting exploration of the human psyche, a grim reminder of the dangers of violence and the changing nature of evil."
+    }
+  ],
+  "probes": [
+    {
+      "kind": "decision",
+      "target": "decisions[0]",
+      "question": "Which film did the thread recommend for the essay, what choice does the main character face, and what writing tip came before that recommendation?",
+      "key_facts": [
+        "watching the Oscar winning movie \"No Country for Old Men\"",
+        "Llewelen Moss has to decide between keeping a large sum of money he found or giving up the money to escape the seemingly unstoppable hitman Anton Chigurh",
+        "Use simple language"
+      ]
+    },
+    {
+      "kind": "verbatim",
+      "target": "verbatim[1]",
+      "question": "Who wrote the novel the recommendation is based on?",
+      "key_facts": [
+        "Cormac McCarthy"
+      ]
+    },
+    {
+      "kind": "next_step",
+      "target": "next_step",
+      "question": "What did I ask for after the first recommendation?",
+      "key_facts": [
+        "Can you give more details?"
+      ]
+    },
+    {
+      "kind": "fact",
+      "target": "environment.references",
+      "question": "Which film is the essay recommendation about?",
+      "key_facts": [
+        "No Country for Old Men"
+      ]
+    }
+  ],
+  "answer_key": {
+    "decisions": [
+      {
+        "topic": "which story to use for the essay",
+        "decision": "watching the Oscar winning movie \"No Country for Old Men\"",
+        "reason": "Llewelen Moss has to decide between keeping a large sum of money he found or giving up the money to escape the seemingly unstoppable hitman Anton Chigurh",
+        "rejected": "Use simple language"
+      }
+    ],
+    "verbatim": [
+      {
+        "label": "the film",
+        "type": "code",
+        "text": "No Country for Old Men"
+      },
+      {
+        "label": "the novelist",
+        "type": "code",
+        "text": "Cormac McCarthy"
+      },
+      {
+        "label": "the choice",
+        "type": "number",
+        "text": "keeping a large sum of money"
+      }
+    ],
+    "next_step": {
+      "text": "Can you give more details?",
+      "required_terms": [
+        "No Country for Old Men",
+        "Anton Chigurh"
+      ]
+    }
+  },
+  "environment": {
+    "references": [
+      {
+        "name": "No Country for Old Men",
+        "status": "still_relevant"
+      },
+      {
+        "name": "Cormac McCarthy",
+        "status": "still_relevant"
+      }
+    ]
+  },
+  "secret_values": [],
+  "meta": {
+    "seed": null,
+    "task": "literature",
+    "length": 6,
+    "generator": "handover-v3",
+    "filler_indexes": [],
+    "next_step_index": 4,
+    "source": {
+      "dataset": "OpenAssistant/oasst1",
+      "revision": "2023-04-12",
+      "license": "Apache-2.0",
+      "url": "https://huggingface.co/datasets/OpenAssistant/oasst1",
+      "message_tree_id": "fe2ded61-516c-4bf6-9bd0-8a4cae922708",
+      "message_ids": [
+        "fe2ded61-516c-4bf6-9bd0-8a4cae922708",
+        "51227d1a-c859-4161-a7a5-69768db06851",
+        "5c8225bc-d62e-4dda-8849-9dc592659d5b",
+        "e3ef6297-6e6a-4ad5-a326-91d07ef4e1bf",
+        "5df3509f-6ac5-4bdf-9bfa-c3ae58b0f609",
+        "e1032059-abd6-4272-a8c8-3ff5deb465b8"
+      ]
+    }
+  }
+}

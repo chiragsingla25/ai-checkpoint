@@ -1,0 +1,147 @@
+{
+  "name": "hardware",
+  "description": "A person asks about consumer graphics cards for AI, then corrects that to a laptop.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What are good consumer graphics cards for running AI?"
+    },
+    {
+      "role": "assistant",
+      "content": "There are several graphics cards that are good for running AI, depending on your specific needs and budget. Here are a few options to consider:\n\n    Nvidia GeForce RTX 3080: This is one of the most powerful consumer graphics cards on the market and is well-suited for AI workloads. It has 10,496 CUDA cores, 328 Tensor cores, and 112 RT cores, making it capable of handling complex AI tasks.\n\n    Nvidia GeForce RTX 3090: This is the top-of-the-line consumer graphics card from Nvidia and is the most powerful graphics card currently available for consumers. It has 10,496 CUDA cores, 328 Tensor cores, and 112 RT cores, making it capable of handling even the most demanding AI workloads.\n\n    Nvidia Titan RTX: This graphics card is designed for professional use but can also be used by consumers for AI workloads. It has 4,608 CUDA cores, 576 Tensor cores, and 72 RT cores, making it a powerful option for running AI.\n\n    AMD Radeon VII: This graphics card is a good option for those who prefer AMD over Nvidia. It has 3,840 Stream Processors and 16GB of HBM2 memory, making it capable of handling AI workloads.\n\n    Nvidia GeForce GTX 1080 Ti: This is an older graphics card but is still capable of running AI workloads. It has 3,584 CUDA cores and 11GB of GDDR5X memory, making it a more affordable option for those on a budget.\n\nIt's important to note that when selecting a graphics card for AI workloads, you should also consider other factors such as the amount of memory and the type of memory, as these can impact performance."
+    },
+    {
+      "role": "user",
+      "content": "I actually would like to buy a Laptop, which graphics cards for a laptop are good for running AI?"
+    },
+    {
+      "role": "assistant",
+      "content": "The most popular GPU for running AI on a laptop is Nvidia GeForce RTX series. These graphics cards are powerful and offer real-time ray tracing for improved visual quality. They are also equipped with Tensor Cores that accelerate AI workloads."
+    }
+  ],
+  "probes": [
+    {
+      "kind": "decision",
+      "target": "decisions[0]",
+      "question": "Which GPU family did the thread recommend for AI on a laptop, why, and which desktop card was named before I said I wanted a laptop?",
+      "key_facts": [
+        "The most popular GPU for running AI on a laptop is Nvidia GeForce RTX series.",
+        "They are also equipped with Tensor Cores that accelerate AI workloads.",
+        "Nvidia GeForce RTX 3080"
+      ],
+      "known_wrong": [
+        "The laptop recommendation is the Nvidia GeForce RTX 3080"
+      ]
+    },
+    {
+      "kind": "verbatim",
+      "target": "verbatim[2]",
+      "question": "Which AMD card did the first reply mention?",
+      "key_facts": [
+        "AMD Radeon VII"
+      ]
+    },
+    {
+      "kind": "stale",
+      "target": "correction",
+      "question": "What should I shop for once I said the machine is a laptop?",
+      "key_facts": [
+        "Nvidia GeForce RTX series"
+      ],
+      "known_wrong": [
+        "Nvidia GeForce RTX 3080"
+      ]
+    },
+    {
+      "kind": "next_step",
+      "target": "next_step",
+      "question": "What is the laptop GPU recommendation?",
+      "key_facts": [
+        "The most popular GPU for running AI on a laptop is Nvidia GeForce RTX series."
+      ]
+    },
+    {
+      "kind": "fact",
+      "target": "environment.tools",
+      "question": "Which GPU recommendation is the current one for the laptop?",
+      "key_facts": [
+        "Nvidia GeForce RTX series"
+      ]
+    }
+  ],
+  "answer_key": {
+    "decisions": [
+      {
+        "topic": "a GPU for AI on a laptop",
+        "decision": "The most popular GPU for running AI on a laptop is Nvidia GeForce RTX series.",
+        "reason": "They are also equipped with Tensor Cores that accelerate AI workloads.",
+        "rejected": "Nvidia GeForce RTX 3080"
+      }
+    ],
+    "verbatim": [
+      {
+        "label": "desktop card named first",
+        "type": "code",
+        "text": "Nvidia GeForce RTX 3080"
+      },
+      {
+        "label": "laptop recommendation",
+        "type": "code",
+        "text": "Nvidia GeForce RTX series"
+      },
+      {
+        "label": "AMD option from the first reply",
+        "type": "number",
+        "text": "AMD Radeon VII"
+      }
+    ],
+    "correction": {
+      "what": "machine the GPU has to fit",
+      "old": "Nvidia GeForce RTX 3080",
+      "new": "Nvidia GeForce RTX series"
+    },
+    "next_step": {
+      "text": "The most popular GPU for running AI on a laptop is Nvidia GeForce RTX series.",
+      "required_terms": [
+        "laptop",
+        "Nvidia GeForce RTX series"
+      ]
+    }
+  },
+  "environment": {
+    "tools": [
+      {
+        "name": "Nvidia GeForce RTX series",
+        "status": "still_relevant"
+      },
+      {
+        "name": "Nvidia GeForce RTX 3080",
+        "status": "done_with"
+      }
+    ]
+  },
+  "secret_values": [],
+  "meta": {
+    "seed": null,
+    "task": "hardware",
+    "length": 4,
+    "generator": "handover-v3",
+    "filler_indexes": [],
+    "next_step_index": 3,
+    "source": {
+      "dataset": "OpenAssistant/oasst1",
+      "revision": "2023-04-12",
+      "license": "Apache-2.0",
+      "url": "https://huggingface.co/datasets/OpenAssistant/oasst1",
+      "message_tree_id": "26617e42-a02f-4b9d-8748-7a3bf3766d79",
+      "message_ids": [
+        "26617e42-a02f-4b9d-8748-7a3bf3766d79",
+        "77457189-bc9d-4464-8933-68b0e8119445",
+        "119596c0-ba80-4b1f-9aef-73c29effed7d",
+        "7bd92834-12d6-48a7-a49f-8e22611219b9"
+      ]
+    },
+    "correction_old_index": 1,
+    "correction_new_index": 3
+  }
+}

@@ -368,8 +368,10 @@ def test_api_failure_is_a_clean_model_error(monkeypatch):
 # t-k" replaced "numbers the tasks t-1, t-2, ..." -> len 3240 -> 3258, hash updated on purpose.
 # F-005: SAVE_TOOL_SUFFIX now tells a resumed chat to give `plan_updates` instead of `tasks`
 # -> len 3258 -> 3410, hash updated on purpose.
-_HEAD_SAVE_DESCRIPTION_SHA256 = "1804ca549cf20ae98303e9c749bb473e053f45d26fe4c66ad30591695b1747a9"
-_HEAD_SAVE_DESCRIPTION_LEN = 3410
+# Next-action heading: a closing "Next step:" sentence is kept whole in the unfinished task's
+# text -> len 3410 -> 3579, hash updated on purpose.
+_HEAD_SAVE_DESCRIPTION_SHA256 = "f83493e6240bdf7c8b44cff84cba5de22811b97e16b7a7f2e1d1abcbb2d109b0"
+_HEAD_SAVE_DESCRIPTION_LEN = 3579
 
 
 def test_save_description_matches_committed_head_text():

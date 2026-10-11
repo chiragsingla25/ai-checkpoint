@@ -18,3 +18,6 @@ results/
 .env.*
 
 .DS_Store
+
+# Hugging Face downloads (excerpts used by handover-v3 are committed under datasets/)
+.cache/
