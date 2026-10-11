@@ -123,6 +123,25 @@ class Listing:
         }
 
 
+def _ref_matchers(ref: str) -> List[Callable[[Checkpoint], bool]]:
+    """How a name ref is matched, most specific first.
+
+    An exact ``chat/name`` wins, then an exact checkpoint name, then the same
+    two comparisons ignoring case. Within the hits, the caller still picks the
+    earliest id in the newest matching chat.
+    """
+    folded = ref.casefold()
+    matchers: List[Callable[[Checkpoint], bool]] = []
+    if "/" in ref:
+        chat, name = (part.strip() for part in ref.split("/", 1))
+        matchers.append(lambda c, chat=chat, name=name: c.chat_name == chat and c.checkpoint_name == name)
+    matchers.append(lambda c, ref=ref: c.checkpoint_name == ref)
+    if "/" in ref:
+        matchers.append(lambda c, folded=folded: f"{c.chat_name}/{c.checkpoint_name}".casefold() == folded)
+    matchers.append(lambda c, folded=folded: c.checkpoint_name.casefold() == folded)
+    return matchers
+
+
 class GitStore:
     """Save / get / resolve / list checkpoints under ``root`` (a git repo)."""
 
@@ -221,11 +240,20 @@ class GitStore:
                 nums.append(int(m.group(1)))
         return nums
 
-    def _file_numbers(self) -> List[int]:
+    def _checkpoint_files(self) -> List[tuple]:
+        """``(id number, path)`` for every ``cp-NNN.json``, lowest id first."""
         if not self.checkpoint_dir.is_dir():
             return []
-        return [int(m.group(1)) for p in self.checkpoint_dir.iterdir()
-                if (m := _FILE_RE.match(p.name))]
+        found = []
+        for path in self.checkpoint_dir.iterdir():
+            match = _FILE_RE.match(path.name)
+            if match:
+                found.append((int(match.group(1)), path))
+        found.sort(key=lambda item: item[0])
+        return found
+
+    def _file_numbers(self) -> List[int]:
+        return [number for number, _path in self._checkpoint_files()]
 
     def _next_id(self) -> str:
         return format_id(max(self._file_numbers() + self._committed_numbers() + [0]) + 1)
@@ -313,14 +341,12 @@ class GitStore:
 
     def _all(self) -> List[Checkpoint]:
         """All stored checkpoints, newest (highest id) first."""
-        if not self.checkpoint_dir.is_dir():
-            return []
-        files = sorted(
-            ((int(m.group(1)), p) for p in self.checkpoint_dir.iterdir()
-             if (m := _FILE_RE.match(p.name))),
-            key=lambda t: t[0], reverse=True,
-        )
-        return [cp for _, p in files if (cp := self._load(p)) is not None]
+        loaded = []
+        for _number, path in reversed(self._checkpoint_files()):
+            cp = self._load(path)
+            if cp is not None:
+                loaded.append(cp)
+        return loaded
 
     def resolve(self, ref: str) -> str:
         """Resolve a ref to a checkpoint id.
@@ -340,16 +366,7 @@ class GitStore:
                 return cid
             raise NotFoundError(ref)
         cps = self._all()  # newest first
-        candidates: List[Callable[[Checkpoint], bool]] = []
-        if "/" in ref_s:
-            chat, name = ref_s.split("/", 1)
-            candidates.append(lambda c: c.chat_name == chat.strip() and c.checkpoint_name == name.strip())
-        candidates.append(lambda c: c.checkpoint_name == ref_s)
-        folded = ref_s.casefold()
-        if "/" in ref_s:
-            candidates.append(lambda c: f"{c.chat_name}/{c.checkpoint_name}".casefold() == folded)
-        candidates.append(lambda c: c.checkpoint_name.casefold() == folded)
-        for match in candidates:
+        for match in _ref_matchers(ref_s):
             hits = [c for c in cps if match(c)]  # newest first
             if hits:
                 # Newest match picks the chat; within that chat the earliest match wins.
